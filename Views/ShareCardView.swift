@@ -15,6 +15,8 @@ struct ShareCardView: View {
 
     let mode: ShareBackgroundMode
     let tightPadding: Bool
+    let textColor: Color
+    let routeColor: Color
 
     var body: some View {
         GeometryReader { geo in
@@ -41,6 +43,24 @@ struct ShareCardView: View {
             let side = max(22, canvas.width * 0.05)
             let topSafe = max(32, canvas.height * (tightPadding ? 0.045 : 0.06))
             let bottomSafe = max(70, canvas.height * (tightPadding ? 0.075 : 0.10))
+
+            // Larger text sizing for readability
+            let titleSize = max(26, canvas.width * 0.075)
+            let subtitleSize = max(14, canvas.width * 0.038)
+            let statLabelSize = max(13, canvas.width * 0.035)
+            let statValueSize = max(22, canvas.width * 0.06)
+            let brandSize = max(12, canvas.width * 0.032)
+
+            let headerHeight = max(96, canvas.height * 0.18)
+            let footerHeight = max(180, canvas.height * 0.26)
+            let rightColumnWidth = max(140, canvas.width * 0.32)
+
+            let routeRect = CGRect(
+                x: visibleRect.minX,
+                y: visibleRect.minY + topSafe + headerHeight,
+                width: visibleRect.width,
+                height: max(1, visibleRect.height - topSafe - bottomSafe - headerHeight - footerHeight)
+            )
 
             ZStack {
                 // Blur-fill background (so Fit mode doesn't show black bars)
@@ -80,45 +100,67 @@ struct ShareCardView: View {
                     .frame(width: visibleRect.width, height: visibleRect.height)
                     .position(x: visibleRect.midX, y: visibleRect.midY)
 
-                // Route trace drawn inside the visible photo rect
+                // Route trace drawn only between the top and bottom text blocks
                 RouteTraceOverlay(
                     route: route,
-                    drawRect: visibleRect,
-                    contentInsets: EdgeInsets(top: topSafe, leading: side, bottom: bottomSafe, trailing: side)
+                    drawRect: routeRect,
+                    contentInsets: EdgeInsets(top: 0, leading: side, bottom: 0, trailing: side),
+                    color: routeColor
                 )
                 .allowsHitTesting(false)
 
                 // Text overlay constrained to visible photo rect (prevents cut-off with Fit)
-                VStack(alignment: .leading, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(title)
-                            .font(.title2)
-                            .bold()
+                            .font(.system(size: titleSize, weight: .bold, design: .default))
                         Text(dateText(summary.startTime))
-                            .font(.subheadline)
+                            .font(.system(size: subtitleSize, weight: .semibold, design: .default))
                             .opacity(0.9)
                     }
+                    .frame(height: headerHeight, alignment: .topLeading)
 
-                    Spacer()
+                    Spacer(minLength: 0)
 
-                    HStack {
-                        statText("Distance", String(format: "%.1f mi", summary.distanceMi))
-                        Spacer()
-                        statText("Time", summary.durationText)
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            statText("Distance",
+                                     String(format: "%.1f mi", summary.distanceMi),
+                                     labelSize: statLabelSize,
+                                     valueSize: statValueSize)
+                            Spacer()
+                            statText("Time",
+                                     summary.durationText,
+                                     labelSize: statLabelSize,
+                                     valueSize: statValueSize,
+                                     alignment: .trailing,
+                                     textAlignment: .trailing)
+                                .frame(width: rightColumnWidth, alignment: .trailing)
+                        }
+
+                        HStack {
+                            statText("Max Speed",
+                                     String(format: "%.1f mph", summary.maxSpeedMph),
+                                     labelSize: statLabelSize,
+                                     valueSize: statValueSize)
+                            Spacer()
+                            statText("Max Lean",
+                                     String(format: "%.0f°", summary.maxAbsLeanDeg),
+                                     labelSize: statLabelSize,
+                                     valueSize: statValueSize,
+                                     alignment: .trailing,
+                                     textAlignment: .trailing)
+                                .frame(width: rightColumnWidth, alignment: .trailing)
+                        }
+
+                        Text("MotorcycleTrackShare")
+                            .font(.system(size: brandSize, weight: .semibold, design: .default))
+                            .opacity(0.85)
+                            .padding(.top, 2)
                     }
-
-                    HStack {
-                        statText("Max Speed", String(format: "%.1f mph", summary.maxSpeedMph))
-                        Spacer()
-                        statText("Max Lean", String(format: "%.0f°", summary.maxAbsLeanDeg))
-                    }
-
-                    Text("MotorcycleTrackShare")
-                        .font(.caption)
-                        .opacity(0.85)
-                        .padding(.top, 2)
+                    .frame(height: footerHeight, alignment: .bottomLeading)
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(textColor)
                 .shadow(color: .black.opacity(0.75), radius: 3, x: 0, y: 1)
                 .padding(.leading, side)
                 .padding(.trailing, side)
@@ -132,10 +174,20 @@ struct ShareCardView: View {
         }
     }
 
-    private func statText(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption).opacity(0.9)
-            Text(value).font(.title3).bold()
+    private func statText(_ label: String,
+                          _ value: String,
+                          labelSize: CGFloat,
+                          valueSize: CGFloat,
+                          alignment: HorizontalAlignment = .leading,
+                          textAlignment: TextAlignment = .leading) -> some View {
+        VStack(alignment: alignment, spacing: 2) {
+            Text(label)
+                .font(.system(size: labelSize, weight: .semibold, design: .default))
+                .opacity(0.9)
+                .multilineTextAlignment(textAlignment)
+            Text(value)
+                .font(.system(size: valueSize, weight: .bold, design: .default))
+                .multilineTextAlignment(textAlignment)
         }
     }
 
@@ -153,6 +205,7 @@ private struct RouteTraceOverlay: View {
     let route: [RidePoint]
     let drawRect: CGRect
     let contentInsets: EdgeInsets
+    let color: Color
 
     var body: some View {
         GeometryReader { _ in
@@ -163,19 +216,19 @@ private struct RouteTraceOverlay: View {
                     p.move(to: pts[0])
                     for pt in pts.dropFirst() { p.addLine(to: pt) }
                 }
-                .stroke(.white.opacity(0.95),
+                .stroke(color.opacity(0.95),
                         style: StrokeStyle(lineWidth: 8, lineCap: .round, lineJoin: .round))
                 .shadow(color: .black.opacity(0.55), radius: 6, x: 0, y: 2)
 
                 // start/end dots
                 Circle()
-                    .fill(.white)
+                    .fill(color)
                     .frame(width: 12, height: 12)
                     .position(pts.first!)
                     .shadow(color: .black.opacity(0.5), radius: 4, x: 0, y: 2)
 
                 Circle()
-                    .fill(.white)
+                    .fill(color)
                     .frame(width: 12, height: 12)
                     .position(pts.last!)
                     .shadow(color: .black.opacity(0.5), radius: 4, x: 0, y: 2)
@@ -211,4 +264,3 @@ private struct RouteTraceOverlay: View {
         }
     }
 }
-

@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UIKit
 
 struct ShareCardScreen: View {
     @EnvironmentObject var rideStore: RideStore
@@ -13,9 +14,11 @@ struct ShareCardScreen: View {
     @State private var backgroundUIImage: UIImage?
     @State private var exportedURL: URL?
     @State private var title: String = "Ride"
-    @State private var saveName: String = ""
     @State private var mode: ShareBackgroundMode = .fill
-    @State private var tightPadding: Bool = true
+    @State private var textColor: Color = .white
+    @State private var showDuplicateAlert = false
+    @State private var showNameSheet = false
+    @State private var pendingName: String = ""
 
     // Dropdown selection key
     // "current" or saved UUID string
@@ -25,9 +28,20 @@ struct ShareCardScreen: View {
         currentSummary != nil && currentRoute.count >= 2
     }
 
+    private var isCurrentRideSaved: Bool {
+        guard let s = currentSummary, currentRoute.count >= 2 else { return false }
+        return rideStore.rides.contains { $0.summary == s && $0.route == currentRoute }
+    }
+
     private var rideOptions: [(key: String, label: String)] {
         var out: [(String, String)] = []
-        out.append(("current", hasCurrentRide ? "Current Ride (unsaved)" : "Current Ride (none)"))
+        let currentLabel: String
+        if hasCurrentRide {
+            currentLabel = isCurrentRideSaved ? "Current Ride (saved)" : "Current Ride (unsaved)"
+        } else {
+            currentLabel = "Current Ride (none)"
+        }
+        out.append(("current", currentLabel))
 
         let df = DateFormatter()
         df.dateStyle = .medium
@@ -60,39 +74,31 @@ struct ShareCardScreen: View {
             VStack(spacing: 14) {
 
                 // Dropdown to choose ride
-                HStack(spacing: 12) {
-                    Text("Ride")
-                        .font(.headline)
-                        .fixedSize(horizontal: true, vertical: false)   // prevents shrinking
-                        .frame(width: 50, alignment: .leading)          // keeps it stable
-
-                    Menu {
-                        ForEach(rideOptions, id: \.key) { opt in
-                            Button {
-                                selectedKey = opt.key
-                            } label: {
-                                Text(opt.label)
-                            }
+                Menu {
+                    ForEach(rideOptions, id: \.key) { opt in
+                        Button {
+                            selectedKey = opt.key
+                        } label: {
+                            Text(opt.label)
                         }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Text(selectedLabel)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 14, weight: .semibold))
-                                .opacity(0.9)
-                        }
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 12)
-                        .frame(maxWidth: .infinity, alignment: .leading) // makes it fill available space
-                        .background(.thinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(selectedLabel)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .opacity(0.9)
+                    }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.thinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .frame(maxWidth: .infinity, alignment: .leading) // prevents the whole “box” resizing
                 .padding(12)
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -102,23 +108,10 @@ struct ShareCardScreen: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16))
 
                 // Save current ride to storage (so it appears later)
-                if selectedKey == "current" {
+                if selectedKey == "current", !isCurrentRideSaved {
                     Button {
-                        guard let s = currentSummary,
-                              let logURL = currentLogURL else { return }
-                        let defaultName = "Ride \(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short))"
-                        let chosen = saveName.trimmingCharacters(in: .whitespacesAndNewlines)
-                        _ = rideStore.saveRide(
-                            name: chosen.isEmpty ? defaultName : chosen,
-                            summary: s,
-                            route: currentRoute,
-                            logTempURL: logURL
-                        )
-                        rideStore.load() // refresh list
-                        if let latest = rideStore.latest {
-                            selectedKey = latest.id.uuidString
-                            saveName = ""
-                        }
+                        pendingName = defaultRideName()
+                        showNameSheet = true
                     } label: {
                         Text("Save Ride to Library")
                             .frame(maxWidth: .infinity)
@@ -127,7 +120,7 @@ struct ShareCardScreen: View {
                     .disabled(currentSummary == nil || currentLogURL == nil || currentRoute.count < 2)
                 }
 
-                // Mode + padding toggles (your existing controls)
+                // Mode controls
                 HStack {
                     Picker("Mode", selection: $mode) {
                         ForEach(ShareBackgroundMode.allCases) { m in
@@ -135,13 +128,17 @@ struct ShareCardScreen: View {
                         }
                     }
                     .pickerStyle(.segmented)
-
-                    Toggle("Tight", isOn: $tightPadding)
-                        .labelsHidden()
                 }
 
-                TextField("Title (optional)", text: $title)
-                    .textFieldStyle(.roundedBorder)
+                HStack(spacing: 8) {
+                    TextField("Title (optional)", text: $title)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: .infinity)
+
+                    ColorPicker("Text", selection: $textColor, supportsOpacity: true)
+                        .labelsHidden()
+                        .frame(width: 44, height: 44, alignment: .trailing)
+                }
 
                 PhotosPicker(selection: $pickedItem, matching: .images) {
                     Label(backgroundUIImage == nil ? "Choose Photo" : "Change Photo", systemImage: "photo")
@@ -177,38 +174,71 @@ struct ShareCardScreen: View {
                         title: title.isEmpty ? "Ride" : title,
                         route: route,
                         mode: mode,
-                        tightPadding: tightPadding
+                        tightPadding: true,
+                        textColor: textColor,
+                        routeColor: textColor
                     )
                     .frame(width: 340, height: 605)
                     .clipShape(RoundedRectangle(cornerRadius: 24))
                     .shadow(radius: 12)
                     .padding(.top, 6)
 
-                    HStack {
-                        Button("Export PNG") {
-                            exportedURL = exportPNG(
-                                background: bg,
-                                summary: s,
-                                title: title.isEmpty ? "Ride" : title,
-                                route: route,
-                                mode: mode,
-                                tightPadding: tightPadding
-                            )
-                        }
-                        .buttonStyle(.borderedProminent)
-
-                        if let url = exportedURL {
-                            ShareLink(item: url) { Text("Share") }
-                                .buttonStyle(.bordered)
-                        }
+                    if let url = exportedURL {
+                        ShareLink(item: url) { Text("Share") }
+                            .buttonStyle(.borderedProminent)
+                            .padding(.top, 6)
                     }
-                    .padding(.top, 6)
                 }
             }
             .padding()
         }
+        .sheet(isPresented: $showNameSheet) {
+            SaveRideSheet(
+                name: $pendingName,
+                onSave: {
+                    guard let s = currentSummary,
+                          let logURL = currentLogURL,
+                          currentRoute.count >= 2 else {
+                        showNameSheet = false
+                        return
+                    }
+
+                    let trimmed = pendingName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let finalName = trimmed.isEmpty ? defaultRideName() : trimmed
+
+                    if rideStore.hasRide(named: finalName) {
+                        showDuplicateAlert = true
+                        return
+                    }
+
+                    _ = rideStore.saveRide(
+                        name: finalName,
+                        summary: s,
+                        route: currentRoute,
+                        logTempURL: logURL
+                    )
+                    rideStore.load()
+                    if let latest = rideStore.latest {
+                        selectedKey = latest.id.uuidString
+                    }
+                    showNameSheet = false
+                },
+                onCancel: { showNameSheet = false }
+            )
+            .presentationDetents([.height(230)])
+        }
+        .alert("Ride name already exists", isPresented: $showDuplicateAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Please choose a different name.")
+        }
         .navigationTitle("Share")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: selectedKey) { _, _ in refreshExportedURLIfNeeded() }
+        .onChange(of: title) { _, _ in refreshExportedURLIfNeeded() }
+        .onChange(of: mode) { _, _ in refreshExportedURLIfNeeded() }
+        .onChange(of: textColor) { _, _ in refreshExportedURLIfNeeded() }
+        .onChange(of: backgroundUIImage) { _, _ in refreshExportedURLIfNeeded() }
         .onAppear {
             rideStore.load()
 
@@ -218,6 +248,8 @@ struct ShareCardScreen: View {
             } else {
                 selectedKey = "current"
             }
+
+            refreshExportedURLIfNeeded()
         }
     }
 
@@ -227,17 +259,21 @@ struct ShareCardScreen: View {
 
         if let data = try? await item.loadTransferable(type: Data.self),
            let ui = UIImage(data: data) {
-            backgroundUIImage = ui
+            backgroundUIImage = normalizedImage(ui)
 
             // Auto-detect tall screenshots and default to FIT
             let ratio = ui.size.height / max(ui.size.width, 1)
             if ratio > 1.9 {
                 mode = .fit
-                tightPadding = true
             } else {
                 mode = .fill
             }
         }
+    }
+
+    private func defaultRideName() -> String {
+        let now = Date()
+        return "Ride \(DateFormatter.localizedString(from: now, dateStyle: .medium, timeStyle: .short))"
     }
 
     private func exportPNG(background: UIImage,
@@ -245,7 +281,7 @@ struct ShareCardScreen: View {
                            title: String,
                            route: [RidePoint],
                            mode: ShareBackgroundMode,
-                           tightPadding: Bool) -> URL? {
+                           textColor: Color) -> URL? {
 
         let size = CGSize(width: 1080, height: 1920)
 
@@ -255,12 +291,14 @@ struct ShareCardScreen: View {
             title: title,
             route: route,
             mode: mode,
-            tightPadding: tightPadding
+            tightPadding: true,
+            textColor: textColor,
+            routeColor: textColor
         )
         .frame(width: size.width, height: size.height)
 
         let renderer = ImageRenderer(content: view)
-        renderer.scale = 1
+        renderer.scale = UIScreen.main.scale
 
         guard let image = renderer.uiImage,
               let data = image.pngData() else { return nil }
@@ -276,5 +314,30 @@ struct ShareCardScreen: View {
             return nil
         }
     }
-}
 
+    private func refreshExportedURLIfNeeded() {
+        guard let bg = backgroundUIImage,
+              let (s, route) = selectedSummaryAndRoute else {
+            exportedURL = nil
+            return
+        }
+
+        exportedURL = exportPNG(
+            background: bg,
+            summary: s,
+            title: title.isEmpty ? "Ride" : title,
+            route: route,
+            mode: mode,
+            textColor: textColor
+        )
+    }
+
+    private func normalizedImage(_ image: UIImage) -> UIImage {
+        if image.imageOrientation == .up { return image }
+        UIGraphicsBeginImageContextWithOptions(image.size, false, image.scale)
+        image.draw(in: CGRect(origin: .zero, size: image.size))
+        let normalized = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return normalized ?? image
+    }
+}

@@ -19,6 +19,7 @@
 		4F59D4C52F18470C0093403B /* RouteSnapshotter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F59D4C42F1847040093403B /* RouteSnapshotter.swift */; };
 		4F9A12072F22B2C90068109E /* SavedRide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9A12062F22B2C60068109E /* SavedRide.swift */; };
 		4F9A12092F22B2E80068109E /* RideStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9A12082F22B2E40068109E /* RideStore.swift */; };
+		4FD997632F351CC100B57C6A /* SaveRideSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FD997622F351CC100B57C6A /* SaveRideSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -54,6 +55,7 @@
 		4F59D4C42F1847040093403B /* RouteSnapshotter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteSnapshotter.swift; sourceTree = "<group>"; };
 		4F9A12062F22B2C60068109E /* SavedRide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedRide.swift; sourceTree = "<group>"; };
 		4F9A12082F22B2E40068109E /* RideStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideStore.swift; sourceTree = "<group>"; };
+		4FD997622F351CC100B57C6A /* SaveRideSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveRideSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -148,6 +150,7 @@
 		4F5009582F132C40005C33B3 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				4FD997622F351CC100B57C6A /* SaveRideSheet.swift */,
 				4F59D4C02F16061A0093403B /* ShareCardScreen.swift */,
 				4F59D4BE2F1605D80093403B /* ShareCardView.swift */,
 				4F50095C2F15E0BB005C33B3 /* ContentView.swift */,
@@ -299,6 +302,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4FD997632F351CC100B57C6A /* SaveRideSheet.swift in Sources */,
 				4F5009632F15F478005C33B3 /* RideSample.swift in Sources */,
 				4F5009642F15F5D5005C33B3 /* ContentView.swift in Sources */,
 				4F50095F2F15F303005C33B3 /* RideRecorder.swift in Sources */,

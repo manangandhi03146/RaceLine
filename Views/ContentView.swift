@@ -38,6 +38,7 @@ struct ContentView: View {
     @State private var showNameSheet = false
     @State private var pendingName: String = ""
     @State private var showTooShortAlert = false
+    @State private var showDuplicateAlert = false
 
     var body: some View {
         NavigationStack {
@@ -73,6 +74,11 @@ struct ContentView: View {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text("Record a little longer so we can capture enough data.")
+            }
+            .alert("Ride name already exists", isPresented: $showDuplicateAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Please choose a different name.")
             }
 
             // Top-left stats (no box)
@@ -181,6 +187,11 @@ struct ContentView: View {
                         let trimmed = pendingName.trimmingCharacters(in: .whitespacesAndNewlines)
                         let finalName = trimmed.isEmpty ? defaultRideName() : trimmed
 
+                        if rideStore.hasRide(named: finalName) {
+                            showDuplicateAlert = true
+                            return
+                        }
+
                         _ = rideStore.saveRide(
                             name: finalName,
                             summary: s,
@@ -255,33 +266,3 @@ struct ContentView: View {
         return String(format: "%.5f, %.5f", lat, lon)
     }
 }
-
-// MARK: - Save sheet
-
-private struct SaveRideSheet: View {
-    @Binding var name: String
-    let onSave: () -> Void
-    let onCancel: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Name your ride")
-                .font(.headline)
-
-            TextField("e.g. Night ride to Rutgers", text: $name)
-                .textFieldStyle(.roundedBorder)
-
-            HStack {
-                Button("Cancel") { onCancel() }
-                    .buttonStyle(.bordered)
-
-                Spacer()
-
-                Button("Save Ride") { onSave() }
-                    .buttonStyle(.borderedProminent)
-            }
-        }
-        .padding()
-    }
-}
-

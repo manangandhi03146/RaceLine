@@ -43,6 +43,11 @@ final class RideStore: ObservableObject {
         do {
             try FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
 
+            let finalName = displayName(name)
+            guard !hasRide(named: finalName) else {
+                return nil
+            }
+
             let id = UUID()
             let folder = baseURL.appendingPathComponent(id.uuidString, isDirectory: true)
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -58,7 +63,7 @@ final class RideStore: ObservableObject {
             let ride = SavedRide(
                 id: id,
                 createdAt: Date(),
-                name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Untitled Ride" : name,
+                name: finalName,
                 summary: summary,
                 route: route,
                 logFilename: logName
@@ -76,7 +81,19 @@ final class RideStore: ObservableObject {
         }
     }
 
+    func hasRide(named name: String) -> Bool {
+        let normalized = normalizedKey(name)
+        return rides.contains { normalizedKey($0.name) == normalized }
+    }
+
+    private func displayName(_ name: String) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Untitled Ride" : trimmed
+    }
+
+    private func normalizedKey(_ name: String) -> String {
+        displayName(name).lowercased()
+    }
 
     var latest: SavedRide? { rides.first }
 }
-
