@@ -9,6 +9,7 @@ struct ShareCardScreen: View {
     let currentSummary: RideSummary?
     let currentRoute: [RidePoint]
     let currentLogURL: URL?
+    @Binding var initiallySelectedRideID: UUID?
 
     @State private var pickedItem: PhotosPickerItem?
     @State private var backgroundUIImage: UIImage?
@@ -18,7 +19,9 @@ struct ShareCardScreen: View {
     @State private var textColor: Color = .white
     @State private var showDuplicateAlert = false
     @State private var showNameSheet = false
+    @State private var reopenNameSheetAfterDuplicate = false
     @State private var pendingName: String = ""
+    @State private var pendingRidePhoto: UIImage?
 
     // Dropdown selection key
     // "current" or saved UUID string
@@ -111,6 +114,7 @@ struct ShareCardScreen: View {
                 if selectedKey == "current", !isCurrentRideSaved {
                     Button {
                         pendingName = defaultRideName()
+                        pendingRidePhoto = nil
                         showNameSheet = true
                     } label: {
                         Text("Save Ride to Library")
@@ -195,6 +199,7 @@ struct ShareCardScreen: View {
         .sheet(isPresented: $showNameSheet) {
             SaveRideSheet(
                 name: $pendingName,
+                selectedImage: $pendingRidePhoto,
                 onSave: {
                     guard let s = currentSummary,
                           let logURL = currentLogURL,
@@ -207,49 +212,91 @@ struct ShareCardScreen: View {
                     let finalName = trimmed.isEmpty ? defaultRideName() : trimmed
 
                     if rideStore.hasRide(named: finalName) {
+                        reopenNameSheetAfterDuplicate = true
                         showDuplicateAlert = true
                         return
                     }
 
-                    _ = rideStore.saveRide(
+                    let savedRide = rideStore.saveRide(
                         name: finalName,
                         summary: s,
                         route: currentRoute,
-                        logTempURL: logURL
+                        logTempURL: logURL,
+                        ridePhoto: pendingRidePhoto
                     )
+                    guard savedRide != nil else {
+                        reopenNameSheetAfterDuplicate = true
+                        showDuplicateAlert = true
+                        return
+                    }
                     rideStore.load()
                     if let latest = rideStore.latest {
                         selectedKey = latest.id.uuidString
                     }
+                    pendingRidePhoto = nil
                     showNameSheet = false
                 },
-                onCancel: { showNameSheet = false }
+                onCancel: {
+                    pendingRidePhoto = nil
+                    showNameSheet = false
+                }
             )
-            .presentationDetents([.height(230)])
+            .presentationDetents([.height(420)])
         }
         .alert("Ride name already exists", isPresented: $showDuplicateAlert) {
             Button("OK", role: .cancel) { }
         } message: {
             Text("Please choose a different name.")
         }
+        .onChange(of: showDuplicateAlert) { _, isShowing in
+            guard !isShowing, reopenNameSheetAfterDuplicate else { return }
+            reopenNameSheetAfterDuplicate = false
+            showNameSheet = true
+        }
         .navigationTitle("Share")
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: selectedKey) { _, _ in refreshExportedURLIfNeeded() }
+        .onChange(of: initiallySelectedRideID) { _, newValue in
+            if newValue != nil {
+                applyInitialSelectionFromNavigation()
+            }
+        }
+        .onChange(of: selectedKey) { _, _ in
+            applyAssociatedRidePhotoIfAvailable()
+            refreshExportedURLIfNeeded()
+        }
         .onChange(of: title) { _, _ in refreshExportedURLIfNeeded() }
         .onChange(of: mode) { _, _ in refreshExportedURLIfNeeded() }
         .onChange(of: textColor) { _, _ in refreshExportedURLIfNeeded() }
         .onChange(of: backgroundUIImage) { _, _ in refreshExportedURLIfNeeded() }
         .onAppear {
             rideStore.load()
-
-            // Default selection: current if available, else latest saved
-            if !hasCurrentRide, let latest = rideStore.latest {
-                selectedKey = latest.id.uuidString
+            if initiallySelectedRideID != nil {
+                applyInitialSelectionFromNavigation()
             } else {
-                selectedKey = "current"
+                setDefaultSelection()
             }
 
+            applyAssociatedRidePhotoIfAvailable()
             refreshExportedURLIfNeeded()
+        }
+    }
+
+    private func applyInitialSelectionFromNavigation() {
+        guard let rideID = initiallySelectedRideID else { return }
+        if rideStore.rides.contains(where: { $0.id == rideID }) {
+            selectedKey = rideID.uuidString
+        } else {
+            setDefaultSelection()
+        }
+        initiallySelectedRideID = nil
+    }
+
+    private func setDefaultSelection() {
+        // Default selection: current if available, else latest saved
+        if !hasCurrentRide, let latest = rideStore.latest {
+            selectedKey = latest.id.uuidString
+        } else {
+            selectedKey = "current"
         }
     }
 
@@ -260,14 +307,7 @@ struct ShareCardScreen: View {
         if let data = try? await item.loadTransferable(type: Data.self),
            let ui = UIImage(data: data) {
             backgroundUIImage = normalizedImage(ui)
-
-            // Auto-detect tall screenshots and default to FIT
-            let ratio = ui.size.height / max(ui.size.width, 1)
-            if ratio > 1.9 {
-                mode = .fit
-            } else {
-                mode = .fill
-            }
+            applyDefaultMode(for: ui)
         }
     }
 
@@ -330,6 +370,29 @@ struct ShareCardScreen: View {
             mode: mode,
             textColor: textColor
         )
+    }
+
+    private func applyAssociatedRidePhotoIfAvailable() {
+        guard selectedKey != "current",
+              let id = UUID(uuidString: selectedKey),
+              let ride = rideStore.rides.first(where: { $0.id == id }) else {
+            return
+        }
+
+        guard let url = rideStore.photoURL(for: ride),
+              let data = try? Data(contentsOf: url),
+              let ui = UIImage(data: data) else {
+            backgroundUIImage = nil
+            return
+        }
+
+        backgroundUIImage = normalizedImage(ui)
+        applyDefaultMode(for: ui)
+    }
+
+    private func applyDefaultMode(for image: UIImage) {
+        let ratio = image.size.height / max(image.size.width, 1)
+        mode = (ratio > 1.9) ? .fit : .fill
     }
 
     private func normalizedImage(_ image: UIImage) -> UIImage {

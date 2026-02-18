@@ -1,7 +1,27 @@
 import Foundation
+import UIKit
 
 @MainActor
 final class RideStore: ObservableObject {
+    enum RenameRideResult {
+        case success
+        case duplicateName
+        case notFound
+        case writeFailed
+    }
+
+    enum DeleteRideResult {
+        case success
+        case notFound
+        case deleteFailed
+    }
+
+    enum SetRidePhotoResult {
+        case success
+        case notFound
+        case writeFailed
+    }
+
     @Published private(set) var rides: [SavedRide] = []
 
     private var baseURL: URL {
@@ -39,7 +59,8 @@ final class RideStore: ObservableObject {
     func saveRide(name: String,
                   summary: RideSummary,
                   route: [RidePoint],
-                  logTempURL: URL) -> SavedRide? {
+                  logTempURL: URL,
+                  ridePhoto: UIImage? = nil) -> SavedRide? {
         do {
             try FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
 
@@ -60,13 +81,27 @@ final class RideStore: ObservableObject {
             }
             try FileManager.default.copyItem(at: logTempURL, to: destLogURL)
 
+            var photoFilename: String?
+            if let ridePhoto {
+                let filename = "ride-photo.jpg"
+                photoFilename = filename
+                guard let imageData = ridePhoto.jpegData(compressionQuality: 0.9) else {
+                    return nil
+                }
+                try imageData.write(
+                    to: folder.appendingPathComponent(filename, isDirectory: false),
+                    options: [.atomic]
+                )
+            }
+
             let ride = SavedRide(
                 id: id,
                 createdAt: Date(),
                 name: finalName,
                 summary: summary,
                 route: route,
-                logFilename: logName
+                logFilename: logName,
+                photoFilename: photoFilename
             )
 
             let metaURL = folder.appendingPathComponent("meta.json")
@@ -81,9 +116,113 @@ final class RideStore: ObservableObject {
         }
     }
 
-    func hasRide(named name: String) -> Bool {
+    func hasRide(named name: String, excludingID: UUID? = nil) -> Bool {
         let normalized = normalizedKey(name)
-        return rides.contains { normalizedKey($0.name) == normalized }
+        return rides.contains { ride in
+            if let excludingID, ride.id == excludingID {
+                return false
+            }
+            return normalizedKey(ride.name) == normalized
+        }
+    }
+
+    func renameRide(id: UUID, newName: String) -> RenameRideResult {
+        let finalName = displayName(newName)
+        guard !hasRide(named: finalName, excludingID: id) else {
+            return .duplicateName
+        }
+
+        guard let index = rides.firstIndex(where: { $0.id == id }) else {
+            return .notFound
+        }
+
+        let current = rides[index]
+        let updated = SavedRide(
+            id: current.id,
+            createdAt: current.createdAt,
+            name: finalName,
+            summary: current.summary,
+            route: current.route,
+            logFilename: current.logFilename,
+            photoFilename: current.photoFilename
+        )
+
+        let folder = baseURL.appendingPathComponent(id.uuidString, isDirectory: true)
+        let metaURL = folder.appendingPathComponent("meta.json")
+
+        do {
+            let data = try JSONEncoder().encode(updated)
+            try data.write(to: metaURL, options: [.atomic])
+            rides[index] = updated
+            return .success
+        } catch {
+            print("RideStore.renameRide error:", error)
+            return .writeFailed
+        }
+    }
+
+    func deleteRide(id: UUID) -> DeleteRideResult {
+        guard let index = rides.firstIndex(where: { $0.id == id }) else {
+            return .notFound
+        }
+
+        let folder = baseURL.appendingPathComponent(id.uuidString, isDirectory: true)
+        do {
+            if FileManager.default.fileExists(atPath: folder.path) {
+                try FileManager.default.removeItem(at: folder)
+            }
+            rides.remove(at: index)
+            return .success
+        } catch {
+            print("RideStore.deleteRide error:", error)
+            return .deleteFailed
+        }
+    }
+
+    func setRidePhoto(id: UUID, image: UIImage) -> SetRidePhotoResult {
+        guard let index = rides.firstIndex(where: { $0.id == id }) else {
+            return .notFound
+        }
+
+        let folder = baseURL.appendingPathComponent(id.uuidString, isDirectory: true)
+        let photoFilename = "ride-photo.jpg"
+        let photoURL = folder.appendingPathComponent(photoFilename, isDirectory: false)
+        let metaURL = folder.appendingPathComponent("meta.json")
+
+        guard let imageData = image.jpegData(compressionQuality: 0.9) else {
+            return .writeFailed
+        }
+
+        do {
+            try imageData.write(to: photoURL, options: [.atomic])
+
+            let current = rides[index]
+            let updated = SavedRide(
+                id: current.id,
+                createdAt: current.createdAt,
+                name: current.name,
+                summary: current.summary,
+                route: current.route,
+                logFilename: current.logFilename,
+                photoFilename: photoFilename
+            )
+
+            let data = try JSONEncoder().encode(updated)
+            try data.write(to: metaURL, options: [.atomic])
+            rides[index] = updated
+            return .success
+        } catch {
+            print("RideStore.setRidePhoto error:", error)
+            return .writeFailed
+        }
+    }
+
+    func photoURL(for ride: SavedRide) -> URL? {
+        guard let photoFilename = ride.photoFilename else { return nil }
+        let folder = baseURL.appendingPathComponent(ride.id.uuidString, isDirectory: true)
+        let photoURL = folder.appendingPathComponent(photoFilename, isDirectory: false)
+        guard FileManager.default.fileExists(atPath: photoURL.path) else { return nil }
+        return photoURL
     }
 
     private func displayName(_ name: String) -> String {

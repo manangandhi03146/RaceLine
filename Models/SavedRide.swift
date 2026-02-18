@@ -7,5 +7,5 @@ struct SavedRide: Codable, Identifiable {
     let summary: RideSummary
     let route: [RidePoint]
     let logFilename: String
+    let photoFilename: String?
 }
-

@@ -58,9 +58,22 @@
 		4FD997622F351CC100B57C6A /* SaveRideSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveRideSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		4F32F5F22F454DA40052ACC1 /* Exceptions for "MotorcycleTrackShare" folder in "MotorcycleTrackShare" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 4F50092A2F132ABF005C33B3 /* MotorcycleTrackShare */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		4F50092D2F132ABF005C33B3 /* MotorcycleTrackShare */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				4F32F5F22F454DA40052ACC1 /* Exceptions for "MotorcycleTrackShare" folder in "MotorcycleTrackShare" target */,
+			);
 			path = MotorcycleTrackShare;
 			sourceTree = "<group>";
 		};
@@ -479,6 +492,7 @@
 				DEVELOPMENT_TEAM = 3244DXH2Z8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MotorcycleTrackShare/Info.plist;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Used to record your ride route and speed";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Used to record lean angle and motion during rides";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -509,6 +523,7 @@
 				DEVELOPMENT_TEAM = 3244DXH2Z8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MotorcycleTrackShare/Info.plist;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Used to record your ride route and speed";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Used to record lean angle and motion during rides";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
