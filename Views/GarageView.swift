@@ -1,0 +1,829 @@
+import SwiftUI
+import UIKit
+
+struct GarageView: View {
+    @ObservedObject var garageStore: GarageStore
+    @ObservedObject var catalogService: MotorcycleCatalogService
+    @EnvironmentObject private var authService: AuthService
+    @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled: Bool = false
+
+    @State private var showAddBikeSheet = false
+    @State private var addBikeErrorMessage: String?
+    @State private var expandedBikeID: UUID?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                if garageStore.bikes.isEmpty {
+                    VStack(spacing: 10) {
+                        Image(systemName: "motorcycle")
+                            .font(.system(size: 40, weight: .semibold))
+                            .foregroundStyle(Color.appAccent.opacity(0.60))
+                        Text("No bikes yet")
+                            .font(.headline)
+                            .foregroundStyle(Color(white: 0.45))
+                        Text("Tap + to add your first bike.")
+                            .font(.subheadline)
+                            .foregroundStyle(Color(white: 0.35))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 60)
+                } else {
+                    LazyVGrid(
+                        columns: [GridItem(.flexible(), spacing: 12)],
+                        spacing: 12
+                    ) {
+                        ForEach(garageStore.bikes) { bike in
+                            Button {
+                                expandedBikeID = bike.id
+                            } label: {
+                                garageBikeCard(bike)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 12)
+                    .padding(.bottom, 120)
+                }
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                garageHeader
+            }
+            .background(Color.appBg)
+            .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showAddBikeSheet) {
+                AddBikeSheet(
+                    catalogService: catalogService,
+                    onSave: { nickname, year, make, model, photo in
+                        switch garageStore.addBike(
+                            nickname: nickname,
+                            year: year,
+                            make: make,
+                            model: model,
+                            photo: photo
+                        ) {
+                        case .success(let bike):
+                            showAddBikeSheet = false
+                            if cloudSyncEnabled, let userID = authService.userID {
+                                let photoToSync = photo
+                                Task {
+                                    if let remoteID = try? await CloudGarageStore().syncBike(bike, userID: userID, photo: photoToSync) {
+                                        let path = photoToSync != nil ? CloudGarageStore().photoStoragePath(userID: userID, bikeID: bike.id) : nil
+                                        _ = garageStore.updateCloudInfo(id: bike.id, remoteID: remoteID, cloudPhotoPath: path)
+                                    }
+                                }
+                            }
+                        case .writeFailed:
+                            addBikeErrorMessage = "The bike could not be saved."
+                        }
+                    },
+                    onCancel: {
+                        showAddBikeSheet = false
+                    }
+                )
+            }
+            .alert("Could Not Save Bike", isPresented: Binding(
+                get: { addBikeErrorMessage != nil },
+                set: { if !$0 { addBikeErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { addBikeErrorMessage = nil }
+            } message: {
+                Text(addBikeErrorMessage ?? "The bike could not be saved.")
+            }
+            .task {
+                garageStore.load()
+                await catalogService.loadMakesIfNeeded()
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { expandedBikeID != nil },
+            set: { if !$0 { expandedBikeID = nil } }
+        )) {
+            if let bikeID = expandedBikeID,
+               let bike = garageStore.bikes.first(where: { $0.id == bikeID }) {
+                GarageBikeDetailScreen(
+                    bike: bike,
+                    initialPhoto: bikeImage(for: bike),
+                    catalogService: catalogService,
+                    onClose: { expandedBikeID = nil },
+                    onUpdate: { nickname, year, make, model in
+                        garageStore.updateBike(
+                            id: bikeID,
+                            nickname: nickname,
+                            year: year,
+                            make: make,
+                            model: model
+                        )
+                    },
+                    onSetPhoto: { image in
+                        garageStore.setBikePhoto(id: bikeID, image: image)
+                    },
+                    onDelete: {
+                        let bikeToDelete = garageStore.bikes.first(where: { $0.id == bikeID })
+                        let result = garageStore.deleteBike(id: bikeID)
+                        if case .success = result,
+                           let bike = bikeToDelete,
+                           let remoteID = bike.remoteID,
+                           let userID = authService.userID {
+                            Task {
+                                try? await CloudGarageStore().deleteBike(
+                                    remoteID: remoteID,
+                                    deletePhoto: bike.cloudPhotoPath != nil,
+                                    userID: userID,
+                                    bikeID: bike.id
+                                )
+                            }
+                        }
+                        return result
+                    }
+                )
+            } else {
+                Color.black
+                    .ignoresSafeArea()
+                    .onAppear { expandedBikeID = nil }
+            }
+        }
+    }
+
+    private var garageHeader: some View {
+        HStack {
+            Text("Garage")
+                .font(.system(size: 34, weight: .bold))
+                .foregroundStyle(.white)
+            Spacer()
+            Button {
+                showAddBikeSheet = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(Color.appBg)
+    }
+
+    @ViewBuilder
+    private func garageBikeCard(_ bike: GarageBike) -> some View {
+        HStack(spacing: 14) {
+            bikePhotoView(for: bike)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(bike.title)
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+
+                if !bike.specLine.isEmpty {
+                    Text(bike.specLine)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.appAccent.opacity(0.85))
+                }
+
+                Text("Added \(formattedDate(bike.createdAt))")
+                    .font(.caption)
+                    .foregroundStyle(Color(white: 0.45))
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color(white: 0.30))
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func bikePhotoView(for bike: GarageBike) -> some View {
+        if let image = bikeImage(for: bike) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 96, height: 96)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        } else {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.appSurface2)
+                .frame(width: 96, height: 96)
+                .overlay {
+                    Image(systemName: "motorcycle")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(Color.appAccent.opacity(0.70))
+                }
+        }
+    }
+
+    private func bikeImage(for bike: GarageBike) -> UIImage? {
+        guard let url = garageStore.photoURL(for: bike),
+              let data = try? Data(contentsOf: url),
+              let image = UIImage(data: data) else {
+            return nil
+        }
+        return image
+    }
+
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
+    }
+}
+
+private struct AddBikeSheet: View {
+    @ObservedObject var catalogService: MotorcycleCatalogService
+
+    let onSave: (String, Int?, String, String, UIImage?) -> Void
+    let onCancel: () -> Void
+
+    @State private var nickname = ""
+    @State private var yearText = ""
+    @State private var selectedMake = ""
+    @State private var selectedModel = ""
+    @State private var manualMake = ""
+    @State private var manualModel = ""
+    @State private var selectedPhoto: UIImage?
+    @State private var showPhotoSourceDialog = false
+    @State private var photoPickerSource: PhotoPickerSource?
+    @State private var showMakeSearch = false
+    @State private var showModelSearch = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Add Bike")
+                    .font(.headline)
+
+                TextField("Nickname (optional)", text: $nickname)
+                    .textFieldStyle(.roundedBorder)
+
+                TextField("Year (optional)", text: $yearText)
+                    .textFieldStyle(.roundedBorder)
+                    .keyboardType(.numberPad)
+
+                if catalogService.isLoadingMakes && catalogService.makes.isEmpty {
+                    ProgressView("Loading motorcycle makes...")
+                } else if catalogService.makes.isEmpty {
+                    TextField("Make", text: $manualMake)
+                        .textFieldStyle(.roundedBorder)
+
+                    if let message = catalogService.makesErrorMessage {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    CatalogPickerButton(
+                        title: "Make",
+                        selection: selectedMake.isEmpty ? "Select make" : selectedMake,
+                        hasValue: !selectedMake.isEmpty
+                    ) { showMakeSearch = true }
+                    .sheet(isPresented: $showMakeSearch) {
+                        CatalogSearchSheet(title: "Make", items: catalogService.makes.map(\.name)) { make in
+                            selectedMake = make
+                            selectedModel = ""
+                            manualModel = ""
+                            Task { await catalogService.loadModels(makeName: make, year: parsedYear) }
+                        }
+                    }
+                }
+
+                if selectedMake.isEmpty && !catalogService.makes.isEmpty {
+                    TextField("Model", text: $manualModel)
+                        .textFieldStyle(.roundedBorder)
+                } else if catalogService.isLoadingModels {
+                    ProgressView("Loading motorcycle models...")
+                } else if catalogService.models.isEmpty && !selectedMake.isEmpty {
+                    TextField("Model", text: $manualModel)
+                        .textFieldStyle(.roundedBorder)
+
+                    if let message = catalogService.modelsErrorMessage {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else if !catalogService.models.isEmpty {
+                    CatalogPickerButton(
+                        title: "Model",
+                        selection: selectedModel.isEmpty ? "Select model" : selectedModel,
+                        hasValue: !selectedModel.isEmpty
+                    ) { showModelSearch = true }
+                    .sheet(isPresented: $showModelSearch) {
+                        CatalogSearchSheet(title: "Model", items: catalogService.models.map(\.name)) { model in
+                            selectedModel = model
+                        }
+                    }
+                }
+
+                Button {
+                    showPhotoSourceDialog = true
+                } label: {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.secondary.opacity(0.12))
+                            .frame(height: 128)
+
+                        if let selectedPhoto {
+                            Image(uiImage: selectedPhoto)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 128)
+                                .clipped()
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        } else {
+                            VStack(spacing: 6) {
+                                Image(systemName: "camera.fill")
+                                    .font(.system(size: 24, weight: .semibold))
+                                    .foregroundStyle(Color.appAccent)
+                                Text("Add Bike Photo")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                Text("Take or upload")
+                                    .font(.caption)
+                                    .foregroundStyle(Color(white: 0.45))
+                            }
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+
+                HStack {
+                    Button("Cancel") {
+                        onCancel()
+                    }
+                    .buttonStyle(.bordered)
+
+                    Spacer()
+
+                    Button("Save Bike") {
+                        onSave(nickname, parsedYear, resolvedMake, resolvedModel, selectedPhoto)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(resolvedMake.isEmpty || resolvedModel.isEmpty)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
+        }
+        .presentationDetents([.height(500)])
+        .confirmationDialog("Bike Photo", isPresented: $showPhotoSourceDialog, titleVisibility: .visible) {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button("Take Photo") {
+                    photoPickerSource = .camera
+                }
+            }
+            Button("Choose Photo") {
+                photoPickerSource = .library
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .sheet(item: $photoPickerSource) { source in
+            UIKitImagePicker(sourceType: source.uiKitSourceType) { image in
+                selectedPhoto = image
+            }
+            .ignoresSafeArea()
+        }
+        .task {
+            await catalogService.loadMakesIfNeeded()
+            if !selectedMake.isEmpty {
+                await catalogService.loadModels(makeName: selectedMake, year: parsedYear)
+            }
+        }
+        .onChange(of: yearText) { _, _ in
+            guard !selectedMake.isEmpty else { return }
+            selectedModel = ""
+            manualModel = ""
+            Task {
+                await catalogService.loadModels(makeName: selectedMake, year: parsedYear)
+            }
+        }
+    }
+
+    private var parsedYear: Int? {
+        guard let year = Int(yearText.trimmingCharacters(in: .whitespacesAndNewlines)),
+              (1900...2100).contains(year) else {
+            return nil
+        }
+        return year
+    }
+
+    private var resolvedMake: String {
+        let selected = selectedMake.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !selected.isEmpty { return selected }
+        return manualMake.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var resolvedModel: String {
+        let selected = selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !selected.isEmpty { return selected }
+        return manualModel.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private enum PhotoPickerSource: String, Identifiable {
+        case camera
+        case library
+
+        var id: String { rawValue }
+
+        var uiKitSourceType: UIImagePickerController.SourceType {
+            switch self {
+            case .camera:
+                return .camera
+            case .library:
+                return .photoLibrary
+            }
+        }
+    }
+}
+
+private struct GarageBikeDetailScreen: View {
+    private enum PhotoPickerSource: String, Identifiable {
+        case camera
+        case library
+
+        var id: String { rawValue }
+
+        var uiKitSourceType: UIImagePickerController.SourceType {
+            switch self {
+            case .camera:
+                return .camera
+            case .library:
+                return .photoLibrary
+            }
+        }
+    }
+
+    let bike: GarageBike
+    let initialPhoto: UIImage?
+    @ObservedObject var catalogService: MotorcycleCatalogService
+    let onClose: () -> Void
+    let onUpdate: (String, Int?, String, String) -> GarageStore.UpdateBikeResult
+    let onSetPhoto: (UIImage) -> GarageStore.SetBikePhotoResult
+    let onDelete: () -> GarageStore.DeleteBikeResult
+
+    @State private var nickname: String
+    @State private var yearText: String
+    @State private var selectedMake: String
+    @State private var selectedModel: String
+    @State private var manualMake: String
+    @State private var manualModel: String
+    @State private var photoImage: UIImage?
+    @State private var showPhotoSourceDialog = false
+    @State private var photoPickerSource: PhotoPickerSource?
+    @State private var showSaveFailedAlert = false
+    @State private var showPhotoSaveFailedAlert = false
+    @State private var showDeleteConfirm = false
+    @State private var showDeleteFailedAlert = false
+    @State private var showMakeSearch = false
+    @State private var showModelSearch = false
+
+    init(bike: GarageBike,
+         initialPhoto: UIImage?,
+         catalogService: MotorcycleCatalogService,
+         onClose: @escaping () -> Void,
+         onUpdate: @escaping (String, Int?, String, String) -> GarageStore.UpdateBikeResult,
+         onSetPhoto: @escaping (UIImage) -> GarageStore.SetBikePhotoResult,
+         onDelete: @escaping () -> GarageStore.DeleteBikeResult) {
+        self.bike = bike
+        self.initialPhoto = initialPhoto
+        self.catalogService = catalogService
+        self.onClose = onClose
+        self.onUpdate = onUpdate
+        self.onSetPhoto = onSetPhoto
+        self.onDelete = onDelete
+        _nickname = State(initialValue: bike.nickname)
+        _yearText = State(initialValue: bike.year.map(String.init) ?? "")
+        _selectedMake = State(initialValue: bike.make)
+        _selectedModel = State(initialValue: bike.model)
+        _manualMake = State(initialValue: bike.make)
+        _manualModel = State(initialValue: bike.model)
+        _photoImage = State(initialValue: initialPhoto)
+    }
+
+    var body: some View {
+        ZStack {
+            Color.appBg.ignoresSafeArea()
+
+            ScrollView {
+                VStack(spacing: 12) {
+                    HStack {
+                        Button {
+                            onClose()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 28, weight: .semibold))
+                                .foregroundStyle(Color(white: 0.40))
+                        }
+
+                        Spacer()
+
+                        Button("Save") {
+                            switch onUpdate(nickname, parsedYear, resolvedMake, resolvedModel) {
+                            case .success:
+                                onClose()
+                            case .notFound, .writeFailed:
+                                showSaveFailedAlert = true
+                            }
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.appAccent)
+                        .disabled(resolvedMake.isEmpty || resolvedModel.isEmpty)
+                    }
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Edit Bike")
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(.white)
+
+                        TextField("Nickname (optional)", text: $nickname)
+                            .textFieldStyle(.roundedBorder)
+
+                        TextField("Year (optional)", text: $yearText)
+                            .textFieldStyle(.roundedBorder)
+                            .keyboardType(.numberPad)
+
+                        if catalogService.isLoadingMakes && catalogService.makes.isEmpty {
+                            ProgressView("Loading motorcycle makes...")
+                        } else if catalogService.makes.isEmpty {
+                            TextField("Make", text: $manualMake)
+                                .textFieldStyle(.roundedBorder)
+                        } else {
+                            CatalogPickerButton(
+                                title: "Make",
+                                selection: selectedMake.isEmpty ? "Select make" : selectedMake,
+                                hasValue: !selectedMake.isEmpty
+                            ) { showMakeSearch = true }
+                            .sheet(isPresented: $showMakeSearch) {
+                                CatalogSearchSheet(title: "Make", items: catalogService.makes.map(\.name)) { make in
+                                    selectedMake = make
+                                    manualMake = make
+                                    selectedModel = ""
+                                    manualModel = ""
+                                    Task { await catalogService.loadModels(makeName: make, year: parsedYear) }
+                                }
+                            }
+                        }
+
+                        if selectedMake.isEmpty && catalogService.makes.isEmpty == false {
+                            TextField("Model", text: $manualModel)
+                                .textFieldStyle(.roundedBorder)
+                        } else if catalogService.isLoadingModels {
+                            ProgressView("Loading motorcycle models...")
+                        } else if catalogService.models.isEmpty {
+                            TextField("Model", text: $manualModel)
+                                .textFieldStyle(.roundedBorder)
+                        } else {
+                            CatalogPickerButton(
+                                title: "Model",
+                                selection: selectedModel.isEmpty ? "Select model" : selectedModel,
+                                hasValue: !selectedModel.isEmpty
+                            ) { showModelSearch = true }
+                            .sheet(isPresented: $showModelSearch) {
+                                CatalogSearchSheet(title: "Model", items: catalogService.models.map(\.name)) { model in
+                                    selectedModel = model
+                                    manualModel = model
+                                }
+                            }
+                        }
+
+                        Button {
+                            showPhotoSourceDialog = true
+                        } label: {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(Color.secondary.opacity(0.14))
+                                    .frame(height: 190)
+
+                                if let photoImage {
+                                    Image(uiImage: photoImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(height: 190)
+                                        .clipped()
+                                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                } else {
+                                    VStack(spacing: 6) {
+                                        Image(systemName: "photo.on.rectangle")
+                                            .font(.system(size: 26, weight: .semibold))
+                                            .foregroundStyle(Color.appAccent)
+                                        Text("Add Bike Photo")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.white)
+                                        Text("Tap to upload or take photo")
+                                            .font(.caption)
+                                            .foregroundStyle(Color(white: 0.45))
+                                    }
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+
+                        Text("Added \(formattedDate(bike.createdAt))")
+                            .font(.caption)
+                            .foregroundStyle(Color(white: 0.45))
+
+                        Spacer(minLength: 0)
+
+                        Button("Delete Bike") {
+                            showDeleteConfirm = true
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .background(Color.red.opacity(0.85))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .background(Color.appSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                }
+                .padding(12)
+            }
+        }
+        .task {
+            await catalogService.loadMakesIfNeeded()
+            if !selectedMake.isEmpty {
+                await catalogService.loadModels(makeName: selectedMake, year: parsedYear)
+            }
+        }
+        .onChange(of: yearText) { _, _ in
+            guard !selectedMake.isEmpty else { return }
+            selectedModel = ""
+            manualModel = ""
+            Task {
+                await catalogService.loadModels(makeName: selectedMake, year: parsedYear)
+            }
+        }
+        .confirmationDialog("Bike Photo", isPresented: $showPhotoSourceDialog, titleVisibility: .visible) {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button("Take Photo") {
+                    photoPickerSource = .camera
+                }
+            }
+            Button("Choose Photo") {
+                photoPickerSource = .library
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .sheet(item: $photoPickerSource) { source in
+            UIKitImagePicker(sourceType: source.uiKitSourceType) { image in
+                switch onSetPhoto(image) {
+                case .success:
+                    photoImage = image
+                case .notFound, .writeFailed:
+                    showPhotoSaveFailedAlert = true
+                }
+            }
+            .ignoresSafeArea()
+        }
+        .alert("Could not save bike", isPresented: $showSaveFailedAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Please try again.")
+        }
+        .alert("Could not save photo", isPresented: $showPhotoSaveFailedAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Please try again.")
+        }
+        .alert("Delete this bike?", isPresented: $showDeleteConfirm) {
+            Button("Delete", role: .destructive) {
+                switch onDelete() {
+                case .success:
+                    onClose()
+                case .notFound, .deleteFailed:
+                    showDeleteFailedAlert = true
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This action cannot be undone.")
+        }
+        .alert("Could not delete bike", isPresented: $showDeleteFailedAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Please try again.")
+        }
+    }
+
+    private var parsedYear: Int? {
+        guard let year = Int(yearText.trimmingCharacters(in: .whitespacesAndNewlines)),
+              (1900...2100).contains(year) else {
+            return nil
+        }
+        return year
+    }
+
+    private var resolvedMake: String {
+        let selected = selectedMake.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !selected.isEmpty { return selected }
+        return manualMake.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var resolvedModel: String {
+        let selected = selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !selected.isEmpty { return selected }
+        return manualModel.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
+    }
+}
+
+private struct CatalogPickerButton: View {
+    let title: String
+    let selection: String
+    let hasValue: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.caption)
+                        .foregroundStyle(Color(white: 0.50))
+                    Text(selection)
+                        .foregroundStyle(hasValue ? Color.white : Color(white: 0.45))
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color.appSurface2)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct CatalogSearchSheet: View {
+    let title: String
+    let items: [String]
+    let onSelect: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    private var filtered: [String] {
+        guard !query.isEmpty else { return [] }
+        let q = query.lowercased()
+        return items.filter { $0.lowercased().contains(q) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if query.isEmpty {
+                    Text("Type to search \(title.lowercased())s")
+                        .foregroundStyle(.secondary)
+                        .listRowBackground(Color.clear)
+                } else if filtered.isEmpty {
+                    Text("No results for \"\(query)\"")
+                        .foregroundStyle(.secondary)
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(filtered, id: \.self) { item in
+                        Button {
+                            onSelect(item)
+                            dismiss()
+                        } label: {
+                            Text(item)
+                                .foregroundStyle(.primary)
+                        }
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .searchable(
+                text: $query,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search \(title.lowercased())s"
+            )
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+}

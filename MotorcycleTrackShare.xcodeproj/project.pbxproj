@@ -19,7 +19,21 @@
 		4F59D4C52F18470C0093403B /* RouteSnapshotter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F59D4C42F1847040093403B /* RouteSnapshotter.swift */; };
 		4F9A12072F22B2C90068109E /* SavedRide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9A12062F22B2C60068109E /* SavedRide.swift */; };
 		4F9A12092F22B2E80068109E /* RideStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9A12082F22B2E40068109E /* RideStore.swift */; };
+		4FA6B3402F999A1400D807A0 /* GarageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA6B33F2F999A1400D807A0 /* GarageView.swift */; };
+		4FA6B3432F999A2300D807A0 /* GarageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA6B3412F999A2300D807A0 /* GarageStore.swift */; };
+		4FA6B3442F999A2300D807A0 /* MotorcycleCatalogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA6B3422F999A2300D807A0 /* MotorcycleCatalogService.swift */; };
+		4FA6B3462F999A2C00D807A0 /* GarageBike.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA6B3452F999A2C00D807A0 /* GarageBike.swift */; };
 		4FD997632F351CC100B57C6A /* SaveRideSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FD997622F351CC100B57C6A /* SaveRideSheet.swift */; };
+		4FE936472FC5867C0027978B /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE936442FC5867C0027978B /* AuthView.swift */; };
+		4FE936482FC5867C0027978B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE936452FC5867C0027978B /* RootView.swift */; };
+		4FE936492FC5867C0027978B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE936462FC5867C0027978B /* SettingsView.swift */; };
+		4FE9364A2FC5867C0027978B /* AppComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE936432FC5867C0027978B /* AppComponents.swift */; };
+		4FE936502FC586920027978B /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE9364B2FC586920027978B /* AuthService.swift */; };
+		4FE936512FC586920027978B /* SupabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE9364F2FC586920027978B /* SupabaseManager.swift */; };
+		4FE936522FC586920027978B /* CloudRideStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE9364D2FC586920027978B /* CloudRideStore.swift */; };
+		4FE936532FC586920027978B /* CloudGarageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE9364C2FC586920027978B /* CloudGarageStore.swift */; };
+		4FE936542FC586920027978B /* CloudStorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE9364E2FC586920027978B /* CloudStorageService.swift */; };
+		4FE936552FC586920027978B /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 4FE936562FC586920027978B /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -55,7 +69,20 @@
 		4F59D4C42F1847040093403B /* RouteSnapshotter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteSnapshotter.swift; sourceTree = "<group>"; };
 		4F9A12062F22B2C60068109E /* SavedRide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedRide.swift; sourceTree = "<group>"; };
 		4F9A12082F22B2E40068109E /* RideStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideStore.swift; sourceTree = "<group>"; };
+		4FA6B33F2F999A1400D807A0 /* GarageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarageView.swift; sourceTree = "<group>"; };
+		4FA6B3412F999A2300D807A0 /* GarageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarageStore.swift; sourceTree = "<group>"; };
+		4FA6B3422F999A2300D807A0 /* MotorcycleCatalogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotorcycleCatalogService.swift; sourceTree = "<group>"; };
+		4FA6B3452F999A2C00D807A0 /* GarageBike.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarageBike.swift; sourceTree = "<group>"; };
 		4FD997622F351CC100B57C6A /* SaveRideSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveRideSheet.swift; sourceTree = "<group>"; };
+		4FE936432FC5867C0027978B /* AppComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppComponents.swift; sourceTree = "<group>"; };
+		4FE936442FC5867C0027978B /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		4FE936452FC5867C0027978B /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		4FE936462FC5867C0027978B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		4FE9364B2FC586920027978B /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		4FE9364C2FC586920027978B /* CloudGarageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudGarageStore.swift; sourceTree = "<group>"; };
+		4FE9364D2FC586920027978B /* CloudRideStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudRideStore.swift; sourceTree = "<group>"; };
+		4FE9364E2FC586920027978B /* CloudStorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudStorageService.swift; sourceTree = "<group>"; };
+		4FE9364F2FC586920027978B /* SupabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -94,6 +121,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4FE936552FC586920027978B /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -140,6 +168,7 @@
 		4F5009562F132C20005C33B3 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				4FA6B3452F999A2C00D807A0 /* GarageBike.swift */,
 				4F9A12062F22B2C60068109E /* SavedRide.swift */,
 				4F59D4C22F1846770093403B /* RidePoint.swift */,
 				4F50095E2F15F09D005C33B3 /* RideSummary.swift */,
@@ -151,6 +180,13 @@
 		4F5009572F132C32005C33B3 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				4FE9364B2FC586920027978B /* AuthService.swift */,
+				4FE9364C2FC586920027978B /* CloudGarageStore.swift */,
+				4FE9364D2FC586920027978B /* CloudRideStore.swift */,
+				4FE9364E2FC586920027978B /* CloudStorageService.swift */,
+				4FE9364F2FC586920027978B /* SupabaseManager.swift */,
+				4FA6B3412F999A2300D807A0 /* GarageStore.swift */,
+				4FA6B3422F999A2300D807A0 /* MotorcycleCatalogService.swift */,
 				4F9A12082F22B2E40068109E /* RideStore.swift */,
 				4F59D4C42F1847040093403B /* RouteSnapshotter.swift */,
 				4F50095B2F132CF1005C33B3 /* RideRecorder.swift */,
@@ -163,6 +199,11 @@
 		4F5009582F132C40005C33B3 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				4FE936432FC5867C0027978B /* AppComponents.swift */,
+				4FE936442FC5867C0027978B /* AuthView.swift */,
+				4FE936452FC5867C0027978B /* RootView.swift */,
+				4FE936462FC5867C0027978B /* SettingsView.swift */,
+				4FA6B33F2F999A1400D807A0 /* GarageView.swift */,
 				4FD997622F351CC100B57C6A /* SaveRideSheet.swift */,
 				4F59D4C02F16061A0093403B /* ShareCardScreen.swift */,
 				4F59D4BE2F1605D80093403B /* ShareCardView.swift */,
@@ -191,6 +232,7 @@
 			);
 			name = MotorcycleTrackShare;
 			packageProductDependencies = (
+				4FE936562FC586920027978B /* Supabase */,
 			);
 			productName = MotorcycleTrackShare;
 			productReference = 4F50092B2F132ABF005C33B3 /* MotorcycleTrackShare.app */;
@@ -274,6 +316,9 @@
 			);
 			mainGroup = 4F5009222F132ABF005C33B3;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				4FE936402FC57B320027978B /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4F50092C2F132ABF005C33B3 /* Products */;
 			projectDirPath = "";
@@ -321,10 +366,23 @@
 				4F50095F2F15F303005C33B3 /* RideRecorder.swift in Sources */,
 				4F5009612F15F30E005C33B3 /* LocationService.swift in Sources */,
 				4F9A12072F22B2C90068109E /* SavedRide.swift in Sources */,
+				4FA6B3432F999A2300D807A0 /* GarageStore.swift in Sources */,
+				4FA6B3442F999A2300D807A0 /* MotorcycleCatalogService.swift in Sources */,
 				4F59D4C52F18470C0093403B /* RouteSnapshotter.swift in Sources */,
+				4FA6B3462F999A2C00D807A0 /* GarageBike.swift in Sources */,
+				4FE936502FC586920027978B /* AuthService.swift in Sources */,
+				4FE936512FC586920027978B /* SupabaseManager.swift in Sources */,
+				4FE936522FC586920027978B /* CloudRideStore.swift in Sources */,
+				4FE936532FC586920027978B /* CloudGarageStore.swift in Sources */,
+				4FE936542FC586920027978B /* CloudStorageService.swift in Sources */,
 				4F5009602F15F309005C33B3 /* MotionService.swift in Sources */,
 				4F5009652F15F5E8005C33B3 /* RideSummary.swift in Sources */,
+				4FE936472FC5867C0027978B /* AuthView.swift in Sources */,
+				4FE936482FC5867C0027978B /* RootView.swift in Sources */,
+				4FE936492FC5867C0027978B /* SettingsView.swift in Sources */,
+				4FE9364A2FC5867C0027978B /* AppComponents.swift in Sources */,
 				4F59D4C12F1606210093403B /* ShareCardScreen.swift in Sources */,
+				4FA6B3402F999A1400D807A0 /* GarageView.swift in Sources */,
 				4F9A12092F22B2E80068109E /* RideStore.swift in Sources */,
 				4F59D4C32F18467B0093403B /* RidePoint.swift in Sources */,
 				4F59D4BF2F1605DF0093403B /* ShareCardView.swift in Sources */,
@@ -656,6 +714,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		4FE936402FC57B320027978B /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		4FE936562FC586920027978B /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4FE936402FC57B320027978B /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 4F5009232F132ABF005C33B3 /* Project object */;
 }

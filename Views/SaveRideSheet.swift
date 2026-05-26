@@ -20,6 +20,8 @@ struct SaveRideSheet: View {
 
     @Binding var name: String
     @Binding var selectedImage: UIImage?
+    @Binding var selectedBikeID: UUID?
+    let bikes: [GarageBike]
     let onSave: () -> Void
     let onCancel: () -> Void
 
@@ -33,6 +35,38 @@ struct SaveRideSheet: View {
 
             TextField("e.g. Night ride to Rutgers", text: $name)
                 .textFieldStyle(.roundedBorder)
+
+            Menu {
+                Button("No bike") {
+                    selectedBikeID = nil
+                }
+                ForEach(bikes) { bike in
+                    Button(bike.title) {
+                        selectedBikeID = bike.id
+                    }
+                }
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Bike Used")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(selectedBikeLabel)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(Color.appSurface2)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
 
             Button {
                 showPhotoSourceDialog = true
@@ -53,13 +87,14 @@ struct SaveRideSheet: View {
                         VStack(spacing: 6) {
                             Image(systemName: "camera.fill")
                                 .font(.system(size: 24, weight: .semibold))
+                                .foregroundStyle(Color.appAccent)
                             Text("Add Ride Photo")
                                 .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
                             Text("Take or upload")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color(white: 0.45))
                         }
-                        .foregroundStyle(.primary)
                     }
                 }
             }
@@ -95,6 +130,14 @@ struct SaveRideSheet: View {
             }
             .ignoresSafeArea()
         }
+    }
+
+    private var selectedBikeLabel: String {
+        guard let selectedBikeID,
+              let bike = bikes.first(where: { $0.id == selectedBikeID }) else {
+            return "No bike"
+        }
+        return bike.title
     }
 }
 

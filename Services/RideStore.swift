@@ -22,6 +22,18 @@ final class RideStore: ObservableObject {
         case writeFailed
     }
 
+    enum SetRideBikeResult {
+        case success
+        case notFound
+        case writeFailed
+    }
+
+    enum ImportRideResult {
+        case success(SavedRide)
+        case duplicateName
+        case writeFailed
+    }
+
     @Published private(set) var rides: [SavedRide] = []
 
     private var baseURL: URL {
@@ -60,6 +72,7 @@ final class RideStore: ObservableObject {
                   summary: RideSummary,
                   route: [RidePoint],
                   logTempURL: URL,
+                  rideBikeID: UUID? = nil,
                   ridePhoto: UIImage? = nil) -> SavedRide? {
         do {
             try FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
@@ -85,7 +98,7 @@ final class RideStore: ObservableObject {
             if let ridePhoto {
                 let filename = "ride-photo.jpg"
                 photoFilename = filename
-                guard let imageData = ridePhoto.jpegData(compressionQuality: 0.9) else {
+                guard let imageData = ridePhoto.jpegData(compressionQuality: 0.8) else {
                     return nil
                 }
                 try imageData.write(
@@ -98,10 +111,16 @@ final class RideStore: ObservableObject {
                 id: id,
                 createdAt: Date(),
                 name: finalName,
+                bikeID: rideBikeID,
                 summary: summary,
                 route: route,
                 logFilename: logName,
-                photoFilename: photoFilename
+                photoFilename: photoFilename,
+                source: .recorded,
+                metricAvailability: .allAvailable,
+                storageMode: nil,
+                cloudPhotoPath: nil,
+                remoteID: nil
             )
 
             let metaURL = folder.appendingPathComponent("meta.json")
@@ -141,10 +160,16 @@ final class RideStore: ObservableObject {
             id: current.id,
             createdAt: current.createdAt,
             name: finalName,
+            bikeID: current.bikeID,
             summary: current.summary,
             route: current.route,
             logFilename: current.logFilename,
-            photoFilename: current.photoFilename
+            photoFilename: current.photoFilename,
+            source: current.source,
+            metricAvailability: current.metricAvailability,
+            storageMode: current.storageMode,
+            cloudPhotoPath: current.cloudPhotoPath,
+            remoteID: current.remoteID
         )
 
         let folder = baseURL.appendingPathComponent(id.uuidString, isDirectory: true)
@@ -189,7 +214,7 @@ final class RideStore: ObservableObject {
         let photoURL = folder.appendingPathComponent(photoFilename, isDirectory: false)
         let metaURL = folder.appendingPathComponent("meta.json")
 
-        guard let imageData = image.jpegData(compressionQuality: 0.9) else {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
             return .writeFailed
         }
 
@@ -201,10 +226,16 @@ final class RideStore: ObservableObject {
                 id: current.id,
                 createdAt: current.createdAt,
                 name: current.name,
+                bikeID: current.bikeID,
                 summary: current.summary,
                 route: current.route,
                 logFilename: current.logFilename,
-                photoFilename: photoFilename
+                photoFilename: photoFilename,
+                source: current.source,
+                metricAvailability: current.metricAvailability,
+                storageMode: current.storageMode,
+                cloudPhotoPath: current.cloudPhotoPath,
+                remoteID: current.remoteID
             )
 
             let data = try JSONEncoder().encode(updated)
@@ -223,6 +254,120 @@ final class RideStore: ObservableObject {
         let photoURL = folder.appendingPathComponent(photoFilename, isDirectory: false)
         guard FileManager.default.fileExists(atPath: photoURL.path) else { return nil }
         return photoURL
+    }
+
+    func setRideBike(id: UUID, bikeID: UUID?) -> SetRideBikeResult {
+        guard let index = rides.firstIndex(where: { $0.id == id }) else {
+            return .notFound
+        }
+
+        let current = rides[index]
+        let updated = SavedRide(
+            id: current.id,
+            createdAt: current.createdAt,
+            name: current.name,
+            bikeID: bikeID,
+            summary: current.summary,
+            route: current.route,
+            logFilename: current.logFilename,
+            photoFilename: current.photoFilename,
+            source: current.source,
+            metricAvailability: current.metricAvailability,
+            storageMode: current.storageMode,
+            cloudPhotoPath: current.cloudPhotoPath,
+            remoteID: current.remoteID
+        )
+
+        let folder = baseURL.appendingPathComponent(id.uuidString, isDirectory: true)
+        let metaURL = folder.appendingPathComponent("meta.json")
+
+        do {
+            let data = try JSONEncoder().encode(updated)
+            try data.write(to: metaURL, options: [.atomic])
+            rides[index] = updated
+            return .success
+        } catch {
+            print("RideStore.setRideBike error:", error)
+            return .writeFailed
+        }
+    }
+
+    func importRide(name: String,
+                    createdAt: Date,
+                    summary: RideSummary,
+                    route: [RidePoint],
+                    sourceFileURL: URL,
+                    rideBikeID: UUID? = nil,
+                    metricAvailability: RideMetricAvailability) -> ImportRideResult {
+        do {
+            try FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
+
+            let finalName = displayName(name)
+            guard !hasRide(named: finalName) else {
+                return .duplicateName
+            }
+
+            let id = UUID()
+            let folder = baseURL.appendingPathComponent(id.uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+            let fileExtension = sourceFileURL.pathExtension.isEmpty ? "gpx" : sourceFileURL.pathExtension
+            let logName = "import.\(fileExtension)"
+            let destURL = folder.appendingPathComponent(logName, isDirectory: false)
+            try FileManager.default.copyItem(at: sourceFileURL, to: destURL)
+
+            let ride = SavedRide(
+                id: id,
+                createdAt: createdAt,
+                name: finalName,
+                bikeID: rideBikeID,
+                summary: summary,
+                route: route,
+                logFilename: logName,
+                photoFilename: nil,
+                source: .importedGPX,
+                metricAvailability: metricAvailability,
+                storageMode: nil,
+                cloudPhotoPath: nil,
+                remoteID: nil
+            )
+
+            let metaURL = folder.appendingPathComponent("meta.json")
+            let data = try JSONEncoder().encode(ride)
+            try data.write(to: metaURL, options: [.atomic])
+
+            rides.insert(ride, at: 0)
+            return .success(ride)
+        } catch {
+            print("RideStore.importRide error:", error)
+            return .writeFailed
+        }
+    }
+
+    func updateCloudInfo(id: UUID, remoteID: UUID, cloudPhotoPath: String?) -> Bool {
+        guard let index = rides.firstIndex(where: { $0.id == id }) else { return false }
+        let current = rides[index]
+        let updated = SavedRide(
+            id: current.id,
+            createdAt: current.createdAt,
+            name: current.name,
+            bikeID: current.bikeID,
+            summary: current.summary,
+            route: current.route,
+            logFilename: current.logFilename,
+            photoFilename: current.photoFilename,
+            source: current.source,
+            metricAvailability: current.metricAvailability,
+            storageMode: .cloud,
+            cloudPhotoPath: cloudPhotoPath ?? current.cloudPhotoPath,
+            remoteID: remoteID
+        )
+        let folder = baseURL.appendingPathComponent(id.uuidString, isDirectory: true)
+        let metaURL = folder.appendingPathComponent("meta.json")
+        guard let data = try? JSONEncoder().encode(updated),
+              (try? data.write(to: metaURL, options: [.atomic])) != nil else { return false }
+        rides[index] = updated
+        return true
     }
 
     private func displayName(_ name: String) -> String {

@@ -3,7 +3,16 @@ import PhotosUI
 import UIKit
 
 struct ShareCardScreen: View {
+    private enum ShareMetricField {
+        case duration
+        case maxSpeed
+        case averageSpeed
+        case maxLean
+        case distance
+    }
+
     @EnvironmentObject var rideStore: RideStore
+    @EnvironmentObject var garageStore: GarageStore
     
     // Current (unsaved) ride passed from ContentView
     let currentSummary: RideSummary?
@@ -14,6 +23,7 @@ struct ShareCardScreen: View {
     @State private var pickedItem: PhotosPickerItem?
     @State private var backgroundUIImage: UIImage?
     @State private var exportedURL: URL?
+    @State private var exportTask: Task<Void, Never>?
     @State private var title: String = "Ride"
     @State private var mode: ShareBackgroundMode = .fill
     @State private var textColor: Color = .white
@@ -22,6 +32,7 @@ struct ShareCardScreen: View {
     @State private var reopenNameSheetAfterDuplicate = false
     @State private var pendingName: String = ""
     @State private var pendingRidePhoto: UIImage?
+    @State private var pendingRideBikeID: UUID?
 
     // Dropdown selection key
     // "current" or saved UUID string
@@ -67,6 +78,12 @@ struct ShareCardScreen: View {
             return (ride.summary, ride.route)
         }
     }
+
+    private var selectedSavedRide: SavedRide? {
+        guard selectedKey != "current",
+              let id = UUID(uuidString: selectedKey) else { return nil }
+        return rideStore.rides.first(where: { $0.id == id })
+    }
     
     private var selectedLabel: String {
         rideOptions.first(where: { $0.key == selectedKey })?.label ?? "Select ride"
@@ -88,32 +105,27 @@ struct ShareCardScreen: View {
                 } label: {
                     HStack(spacing: 8) {
                         Text(selectedLabel)
+                            .foregroundStyle(.white)
                             .lineLimit(1)
                             .truncationMode(.tail)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                         Image(systemName: "chevron.down")
                             .font(.system(size: 14, weight: .semibold))
-                            .opacity(0.9)
+                            .foregroundStyle(Color.appAccent)
                     }
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 14)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.thinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .background(Color.appSurface2)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .padding(12)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-
-                .padding(12)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
 
                 // Save current ride to storage (so it appears later)
                 if selectedKey == "current", !isCurrentRideSaved {
                     Button {
                         pendingName = defaultRideName()
+                        pendingRideBikeID = nil
                         pendingRidePhoto = nil
                         showNameSheet = true
                     } label: {
@@ -153,21 +165,27 @@ struct ShareCardScreen: View {
 
                 // Show the exact stats that will be on the image
                 if let (s, _) = selectedSummaryAndRoute {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Stats on share image").font(.headline)
-                        Text("Distance: \(String(format: "%.2f mi", s.distanceMi))")
-                        Text("Time: \(s.durationText)")
-                        Text("Max Speed: \(String(format: "%.1f mph", s.maxSpeedMph))")
-                        Text("Max Lean: \(String(format: "%.0f°", s.maxAbsLeanDeg))")
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Ride Stats")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color(white: 0.50))
+                        shareStatRow("Distance", shareMetricText(summary: s, field: .distance))
+                        shareStatRow("Time", shareMetricText(summary: s, field: .duration))
+                        shareStatRow("Max Speed", shareMetricText(summary: s, field: .maxSpeed))
+                        shareStatRow("Max Lean", shareMetricText(summary: s, field: .maxLean))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .padding(14)
+                    .background(Color.appSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 } else {
                     Text("No ride data yet. Record a ride, then come back here.")
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                        .foregroundStyle(Color(white: 0.45))
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                        .background(Color.appSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
 
                 // Preview + export
@@ -196,10 +214,13 @@ struct ShareCardScreen: View {
             }
             .padding()
         }
+        .background(Color.appBg.ignoresSafeArea())
         .sheet(isPresented: $showNameSheet) {
             SaveRideSheet(
                 name: $pendingName,
                 selectedImage: $pendingRidePhoto,
+                selectedBikeID: $pendingRideBikeID,
+                bikes: garageStore.bikes,
                 onSave: {
                     guard let s = currentSummary,
                           let logURL = currentLogURL,
@@ -222,6 +243,7 @@ struct ShareCardScreen: View {
                         summary: s,
                         route: currentRoute,
                         logTempURL: logURL,
+                        rideBikeID: pendingRideBikeID,
                         ridePhoto: pendingRidePhoto
                     )
                     guard savedRide != nil else {
@@ -233,10 +255,12 @@ struct ShareCardScreen: View {
                     if let latest = rideStore.latest {
                         selectedKey = latest.id.uuidString
                     }
+                    pendingRideBikeID = nil
                     pendingRidePhoto = nil
                     showNameSheet = false
                 },
                 onCancel: {
+                    pendingRideBikeID = nil
                     pendingRidePhoto = nil
                     showNameSheet = false
                 }
@@ -261,23 +285,20 @@ struct ShareCardScreen: View {
             }
         }
         .onChange(of: selectedKey) { _, _ in
-            applyAssociatedRidePhotoIfAvailable()
-            refreshExportedURLIfNeeded()
+            Task { await applyAssociatedRidePhotoIfAvailable() }
         }
         .onChange(of: title) { _, _ in refreshExportedURLIfNeeded() }
         .onChange(of: mode) { _, _ in refreshExportedURLIfNeeded() }
         .onChange(of: textColor) { _, _ in refreshExportedURLIfNeeded() }
         .onChange(of: backgroundUIImage) { _, _ in refreshExportedURLIfNeeded() }
         .onAppear {
-            rideStore.load()
+            if rideStore.rides.isEmpty { rideStore.load() }
             if initiallySelectedRideID != nil {
                 applyInitialSelectionFromNavigation()
             } else {
                 setDefaultSelection()
             }
-
-            applyAssociatedRidePhotoIfAvailable()
-            refreshExportedURLIfNeeded()
+            Task { await applyAssociatedRidePhotoIfAvailable() }
         }
     }
 
@@ -356,38 +377,39 @@ struct ShareCardScreen: View {
     }
 
     private func refreshExportedURLIfNeeded() {
+        exportTask?.cancel()
         guard let bg = backgroundUIImage,
               let (s, route) = selectedSummaryAndRoute else {
             exportedURL = nil
             return
         }
-
-        exportedURL = exportPNG(
-            background: bg,
-            summary: s,
-            title: title.isEmpty ? "Ride" : title,
-            route: route,
-            mode: mode,
-            textColor: textColor
-        )
+        let (t, m, c) = (title.isEmpty ? "Ride" : title, mode, textColor)
+        exportTask = Task {
+            let url = exportPNG(background: bg, summary: s, title: t, route: route, mode: m, textColor: c)
+            if !Task.isCancelled { exportedURL = url }
+        }
     }
 
-    private func applyAssociatedRidePhotoIfAvailable() {
+    private func applyAssociatedRidePhotoIfAvailable() async {
         guard selectedKey != "current",
               let id = UUID(uuidString: selectedKey),
-              let ride = rideStore.rides.first(where: { $0.id == id }) else {
+              let ride = rideStore.rides.first(where: { $0.id == id }),
+              let url = rideStore.photoURL(for: ride) else {
+            if selectedKey == "current" { /* keep existing background */ }
             return
         }
 
-        guard let url = rideStore.photoURL(for: ride),
-              let data = try? Data(contentsOf: url),
-              let ui = UIImage(data: data) else {
+        let image = await Task.detached(priority: .userInitiated) { () -> UIImage? in
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return UIImage(data: data)
+        }.value
+
+        guard let image else {
             backgroundUIImage = nil
             return
         }
-
-        backgroundUIImage = normalizedImage(ui)
-        applyDefaultMode(for: ui)
+        backgroundUIImage = normalizedImage(image)
+        applyDefaultMode(for: image)
     }
 
     private func applyDefaultMode(for image: UIImage) {
@@ -402,5 +424,37 @@ struct ShareCardScreen: View {
         let normalized = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
         return normalized ?? image
+    }
+
+    private func shareStatRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(Color(white: 0.50))
+            Spacer()
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+        }
+    }
+
+    private func shareMetricText(summary: RideSummary, field: ShareMetricField) -> String {
+        let availability = selectedSavedRide?.metricAvailability ?? .allAvailable
+        switch field {
+        case .duration:
+            return availability.hasDuration ? summary.durationText : "N/A"
+        case .maxSpeed:
+            return availability.hasMaxSpeed ? String(format: "%.1f mph", summary.maxSpeedMph) : "N/A"
+        case .averageSpeed:
+            if availability.hasAverageSpeed, summary.durationSec > 0 {
+                let avgMps = summary.distanceM / summary.durationSec
+                return String(format: "%.1f mph", avgMps * 2.23693629)
+            }
+            return "N/A"
+        case .maxLean:
+            return availability.hasMaxLean ? String(format: "%.0f°", summary.maxAbsLeanDeg) : "N/A"
+        case .distance:
+            return availability.hasDistance ? String(format: "%.2f mi", summary.distanceMi) : "N/A"
+        }
     }
 }

@@ -1,17 +1,16 @@
-//
-//  MotorcycleTrackShareApp.swift
-//  MotorcycleTrackShare
-//
-//  Created by Manan Gandhi on 1/10/26.
-//
-
 import SwiftUI
 
 @main
 struct MotorcycleTrackShareApp: App {
+    @StateObject private var authService = AuthService()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
+                .environmentObject(authService)
+                .task {
+                    await authService.initialize()
+                }
         }
     }
 }
