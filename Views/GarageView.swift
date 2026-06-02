@@ -15,19 +15,28 @@ struct GarageView: View {
         NavigationStack {
             ScrollView {
                 if garageStore.bikes.isEmpty {
-                    VStack(spacing: 10) {
-                        Image(systemName: "motorcycle")
-                            .font(.system(size: 40, weight: .semibold))
-                            .foregroundStyle(Color.appAccent.opacity(0.60))
-                        Text("No bikes yet")
-                            .font(.headline)
-                            .foregroundStyle(Color(white: 0.45))
-                        Text("Tap + to add your first bike.")
-                            .font(.subheadline)
-                            .foregroundStyle(Color(white: 0.35))
+                    VStack(spacing: 20) {
+                        VStack(spacing: 12) {
+                            Image(systemName: "motorcycle")
+                                .font(.system(size: 44, weight: .semibold))
+                                .foregroundStyle(Color.appAccent)
+                            Text("No bikes yet")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(Color.textPrimary)
+                            Text("Add your first bike to get started.")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.textSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(32)
+                        .frame(maxWidth: .infinity)
+
+                        PrimaryButton(title: "Add First Bike") {
+                            showAddBikeSheet = true
+                        }
+                        .padding(.horizontal, 32)
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 60)
+                    .padding(.top, 40)
                 } else {
                     LazyVGrid(
                         columns: [GridItem(.flexible(), spacing: 12)],
@@ -185,14 +194,14 @@ struct GarageView: View {
 
                 Text("Added \(formattedDate(bike.createdAt))")
                     .font(.caption)
-                    .foregroundStyle(Color(white: 0.45))
+                    .foregroundStyle(Color.textTertiary)
             }
 
             Spacer(minLength: 0)
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color(white: 0.30))
+                .foregroundStyle(Color.textGhost)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -216,7 +225,7 @@ struct GarageView: View {
                 .overlay {
                     Image(systemName: "motorcycle")
                         .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(Color.appAccent.opacity(0.70))
+                        .foregroundStyle(Color.appAccent)
                 }
         }
     }

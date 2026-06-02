@@ -2,68 +2,66 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var authService: AuthService
+    @EnvironmentObject private var rideStore: RideStore
     @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled: Bool = false
-    @AppStorage("localOnlyMode") private var localOnlyMode: Bool = false
     @AppStorage("hasChosenStorageMode") private var hasChosenStorageMode: Bool = false
 
-    @State private var isLoggingOut = false
-    @State private var showLogoutError = false
-    @State private var showSignInPrompt = false
+    // MARK: - All-time stat aggregates
+    private var allTimeMaxSpeedMph: Double {
+        rideStore.rides.map { $0.summary.maxSpeedMph }.max() ?? 0
+    }
+    private var allTimeMaxLeanRight: Double {
+        rideStore.rides.map { $0.summary.maxLeanRightDeg }.max() ?? 0
+    }
+    private var allTimeMaxLeanLeft: Double {
+        rideStore.rides.map { $0.summary.maxLeanLeftDeg }.max() ?? 0
+    }
+    private var totalDistanceMi: Double {
+        rideStore.rides.reduce(0) { $0 + $1.summary.distanceMi }
+    }
+    private var totalRides: Int { rideStore.rides.count }
 
     var body: some View {
         List {
-            // Account section
+            // Personal bests section
             Section {
-                if authService.isLoggedIn {
-                    HStack(spacing: 12) {
-                        Image(systemName: "person.circle.fill")
-                            .font(.system(size: 36))
-                            .foregroundStyle(Color.appAccent)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(authService.userEmail ?? "Signed in")
-                                .font(.headline)
-                            Text("Cloud sync available")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 4)
-
-                    Button(role: .destructive) {
-                        Task { await logOut() }
-                    } label: {
-                        HStack {
-                            if isLoggingOut {
-                                ProgressView().frame(width: 20, height: 20)
-                            } else {
-                                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                            }
-                        }
-                    }
-                    .disabled(isLoggingOut)
+                if rideStore.rides.isEmpty {
+                    Text("Record your first ride to see your stats here.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 } else {
-                    HStack(spacing: 12) {
-                        Image(systemName: "person.circle")
-                            .font(.system(size: 36))
+                    personalBestRow(
+                        label: "Max Lean — Right",
+                        value: allTimeMaxLeanRight > 0
+                            ? String(format: "%.1f°", allTimeMaxLeanRight) : "—",
+                        icon: "rotate.right.fill"
+                    )
+                    personalBestRow(
+                        label: "Max Lean — Left",
+                        value: allTimeMaxLeanLeft > 0
+                            ? String(format: "%.1f°", allTimeMaxLeanLeft) : "—",
+                        icon: "rotate.left.fill"
+                    )
+                    personalBestRow(
+                        label: "Max Speed",
+                        value: allTimeMaxSpeedMph > 0
+                            ? String(format: "%.1f mph", allTimeMaxSpeedMph) : "—",
+                        icon: "speedometer"
+                    )
+                    Divider()
+                    HStack {
+                        Label("\(totalRides) ride\(totalRides == 1 ? "" : "s")",
+                              systemImage: "flag.checkered")
                             .foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Local mode")
-                                .font(.headline)
-                            Text("Rides saved on this device only")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 4)
-
-                    Button {
-                        showSignInPrompt = true
-                    } label: {
-                        Label("Sign in or create account", systemImage: "arrow.right.circle")
+                            .font(.subheadline)
+                        Spacer()
+                        Text(String(format: "%.1f mi total", totalDistanceMi))
+                            .foregroundStyle(.secondary)
+                            .font(.subheadline)
                     }
                 }
             } header: {
-                Text("Account")
+                Text("Personal Bests")
             }
 
             // Cloud sync section
@@ -71,6 +69,7 @@ struct SettingsView: View {
                 Toggle(isOn: $cloudSyncEnabled) {
                     Label("Sync photos to cloud", systemImage: "icloud.and.arrow.up")
                 }
+                .tint(Color.appAccent)
                 .disabled(!authService.isLoggedIn)
                 .onChange(of: cloudSyncEnabled) { _, newValue in
                     if newValue { hasChosenStorageMode = true }
@@ -90,7 +89,7 @@ struct SettingsView: View {
                         Image(systemName: "info.circle")
                             .foregroundStyle(.secondary)
                             .font(.system(size: 14))
-                        Text("Sign in to enable cloud photo sync.")
+                        Text("Sign in via the Profile tab to enable cloud photo sync.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -127,35 +126,20 @@ struct SettingsView: View {
                 Text("About")
             }
         }
+        .contentMargins(.bottom, 80, for: .scrollContent)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
-        .alert("Sign Out Failed", isPresented: $showLogoutError) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Please try again.")
-        }
-        .sheet(isPresented: $showSignInPrompt) {
-            NavigationStack {
-                AuthView()
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Cancel") { showSignInPrompt = false }
-                        }
-                    }
-            }
-        }
+        .toolbarBackground(Color.appSurface, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
     }
 
-    private func logOut() async {
-        isLoggingOut = true
-        do {
-            cloudSyncEnabled = false
-            try await authService.signOut()
-            localOnlyMode = true
-        } catch {
-            showLogoutError = true
+    private func personalBestRow(label: String, value: String, icon: String) -> some View {
+        HStack {
+            Label(label, systemImage: icon)
+            Spacer()
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.appAccent)
         }
-        isLoggingOut = false
     }
 }

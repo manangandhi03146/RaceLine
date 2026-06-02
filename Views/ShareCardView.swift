@@ -39,21 +39,19 @@ struct ShareCardView: View {
                 }
             }()
 
-            // Smaller safe zones (your old ones were too big)
-            let side = max(22, canvas.width * 0.05)
-            let topSafe = max(32, canvas.height * (tightPadding ? 0.045 : 0.06))
-            let bottomSafe = max(70, canvas.height * (tightPadding ? 0.075 : 0.10))
+            let side = canvas.width * 0.05
+            let topSafe = canvas.height * (tightPadding ? 0.045 : 0.06)
+            let bottomSafe = canvas.height * (tightPadding ? 0.075 : 0.10)
 
-            // Larger text sizing for readability
-            let titleSize = max(26, canvas.width * 0.075)
-            let subtitleSize = max(14, canvas.width * 0.038)
-            let statLabelSize = max(13, canvas.width * 0.035)
-            let statValueSize = max(22, canvas.width * 0.06)
-            let brandSize = max(12, canvas.width * 0.032)
+            let titleSize = max(16, canvas.width * 0.075)
+            let subtitleSize = max(9, canvas.width * 0.038)
+            let statLabelSize = max(8, canvas.width * 0.035)
+            let statValueSize = max(14, canvas.width * 0.065)
+            let brandSize = max(7, canvas.width * 0.032)
 
-            let headerHeight = max(96, canvas.height * 0.18)
-            let footerHeight = max(180, canvas.height * 0.26)
-            let rightColumnWidth = max(140, canvas.width * 0.32)
+            let headerHeight = canvas.height * 0.18
+            let footerHeight = canvas.height * 0.28
+            let rightColumnWidth = canvas.width * 0.38
 
             let routeRect = CGRect(
                 x: visibleRect.minX,

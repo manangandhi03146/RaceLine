@@ -5,7 +5,8 @@ final class RideRecorder: ObservableObject {
     @Published private(set) var isRecording: Bool = false
     @Published private(set) var fileURL: URL?
     @Published private(set) var summary: RideSummary?
-    @Published private(set) var route: [RidePoint] = []   // <-- NEW: GPS trace points
+    @Published private(set) var route: [RidePoint] = []
+    @Published private(set) var liveMaxAbsLeanDeg: Double = 0
 
     private var samples: [RideSample] = []
     private var recordingTask: Task<Void, Never>?
@@ -26,6 +27,7 @@ final class RideRecorder: ObservableObject {
         summary = nil
         samples.removeAll()
         route.removeAll()
+        liveMaxAbsLeanDeg = 0
 
         startTime = Date()
         distanceM = 0
@@ -60,8 +62,11 @@ final class RideRecorder: ObservableObject {
         let end = Date()
         let start = startTime ?? end
 
+        let leanValues = samples.compactMap { $0.leanDeg }
         let maxSpeed = samples.compactMap { $0.speedMps }.max() ?? 0
-        let maxLean = samples.compactMap { $0.leanDeg }.map { abs($0) }.max() ?? 0
+        let maxLean  = leanValues.map { abs($0) }.max() ?? 0
+        let maxRight = leanValues.filter { $0 > 0 }.max() ?? 0
+        let maxLeft  = leanValues.filter { $0 < 0 }.map { abs($0) }.max() ?? 0
 
         summary = RideSummary(
             startTime: start,
@@ -69,7 +74,9 @@ final class RideRecorder: ObservableObject {
             durationSec: end.timeIntervalSince(start),
             distanceM: distanceM,
             maxSpeedMps: maxSpeed,
-            maxAbsLeanDeg: maxLean
+            maxAbsLeanDeg: maxLean,
+            maxLeanRightDeg: maxRight,
+            maxLeanLeftDeg: maxLeft
         )
 
         do {
@@ -108,6 +115,11 @@ final class RideRecorder: ObservableObject {
             }
 
             lastCoord = (lat, lon)
+        }
+
+        let absLean = abs(motion.leanDeg)
+        if absLean > liveMaxAbsLeanDeg {
+            liveMaxAbsLeanDeg = absLean
         }
 
         let s = RideSample(

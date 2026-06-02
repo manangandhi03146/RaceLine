@@ -370,6 +370,24 @@ final class RideStore: ObservableObject {
         return true
     }
 
+    func jsonlExportURL(for ride: SavedRide) -> URL? {
+        guard ride.logFilename.hasSuffix(".jsonl") else { return nil }
+        let folder = baseURL.appendingPathComponent(ride.id.uuidString, isDirectory: true)
+        let sourceURL = folder.appendingPathComponent(ride.logFilename, isDirectory: false)
+        guard FileManager.default.fileExists(atPath: sourceURL.path) else { return nil }
+
+        let safeName = ride.name
+            .components(separatedBy: CharacterSet(charactersIn: "/\\:*?\"<>|"))
+            .joined(separator: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let filename = (safeName.isEmpty ? "ride" : safeName) + ".jsonl"
+        let destURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+
+        try? FileManager.default.removeItem(at: destURL)
+        try? FileManager.default.copyItem(at: sourceURL, to: destURL)
+        return FileManager.default.fileExists(atPath: destURL.path) ? destURL : nil
+    }
+
     private func displayName(_ name: String) -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "Untitled Ride" : trimmed

@@ -1,16 +1,3 @@
-//
-//  ContentView.swift
-//  MotorcycleTrackShare
-//
-//  Fully updated:
-//  - Map background + live stats (no box)
-//  - Start/Stop + Calibrate (left) + Share (right, always clickable)
-//  - Auto-center once on first valid GPS fix (no “ocean start”)
-//  - Motion updates always running so Calibrate updates lean even when not recording
-//  - On Stop: reliably prompts to Save ride (waits until summary/fileURL are ready)
-//  - Save prompt + name sheet
-//
-
 import SwiftUI
 import MapKit
 import UIKit
@@ -22,6 +9,7 @@ struct ContentView: View {
         case ride
         case share
         case garage
+        case profile
         case settings
     }
 
@@ -36,7 +24,6 @@ struct ContentView: View {
     @StateObject private var motorcycleCatalog = MotorcycleCatalogService()
     @State private var selectedTab: Tab = .ride
 
-    // Map camera
     @State private var position: MapCameraPosition = .region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 40.0, longitude: -74.0),
@@ -45,7 +32,6 @@ struct ContentView: View {
     )
     @State private var didInitialCenter = false
 
-    // Stop -> Save prompt (reliable)
     @State private var awaitingSavePrompt = false
     @State private var showSavePrompt = false
     @State private var showNameSheet = false
@@ -86,9 +72,14 @@ struct ContentView: View {
                     garageStore: garageStore,
                     catalogService: motorcycleCatalog
                 )
+            } else if selectedTab == .profile {
+                NavigationStack {
+                    ProfileView()
+                }
             } else if selectedTab == .settings {
                 NavigationStack {
                     SettingsView()
+                        .environmentObject(rideStore)
                 }
             } else {
                 calendarView
@@ -107,6 +98,9 @@ struct ContentView: View {
                     ride: ride,
                     initialPhoto: ridePhotoImage(for: ride),
                     bikes: garageStore.bikes,
+                    onExportJSONL: ride.logFilename.hasSuffix(".jsonl") ? {
+                        rideStore.jsonlExportURL(for: ride)
+                    } : nil,
                     onClose: { expandedRideID = nil },
                     onRename: { newName in
                         rideStore.renameRide(id: rideID, newName: newName)
@@ -142,7 +136,7 @@ struct ContentView: View {
                     }
                 )
             } else {
-                Color.black
+                Color.appBg
                     .ignoresSafeArea()
                     .onAppear { expandedRideID = nil }
             }
@@ -167,43 +161,302 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Ride Recording View
+
+    private var rideRecordingView: some View {
+        ZStack {
+            Map(position: $position, interactionModes: .all) {
+                UserAnnotation()
+            }
+            .mapControls {
+                MapUserLocationButton()
+                MapCompass()
+                MapScaleView()
+            }
+
+            // Bottom-up gradient: matches nav bar at bottom, fades above lean stats
+            VStack(spacing: 0) {
+                Spacer()
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: Color.appSurface.opacity(0.55), location: 0.35),
+                        .init(color: Color.appSurface.opacity(0.92), location: 0.72),
+                        .init(color: Color.appSurface, location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 560)
+            }
+            .allowsHitTesting(false)
+
+            // Stats + controls
+            VStack(spacing: 0) {
+                // Top strip: elapsed time + distance
+                HStack(alignment: .top) {
+                    rideTopStat("TIME", recordingTime)
+                    Spacer()
+                    rideTopStat("DIST", recordingDistance)
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 10)
+                .shadow(color: .black.opacity(0.6), radius: 4, x: 0, y: 1)
+                .opacity(recorder.isRecording || recorder.summary != nil ? 1 : 0)
+
+                Spacer()
+
+                // Speed — dominant stat
+                VStack(spacing: 4) {
+                    Text(speedDisplayText)
+                        .font(.statDisplay)
+                        .foregroundStyle(Color.appAccent)
+                        .contentTransition(.numericText())
+                        .animation(.easeOut(duration: 0.18), value: speedDisplayText)
+
+                    Text("MPH")
+                        .font(.system(size: 13, weight: .semibold))
+                        .kerning(2.0)
+                        .foregroundStyle(Color.textGhost)
+                }
+
+                // Lean angle — live + max
+                VStack(spacing: 4) {
+                    Text(liveLeanDisplayText)
+                        .font(.statSecondary)
+                        .foregroundStyle(Color.textPrimary)
+                        .contentTransition(.numericText())
+                        .animation(.easeOut(duration: 0.18), value: liveLeanDisplayText)
+
+                    Text("LEAN")
+                        .font(.system(size: 11, weight: .semibold))
+                        .kerning(1.5)
+                        .foregroundStyle(Color.textGhost)
+
+                    if recorder.isRecording || recorder.summary != nil {
+                        Text(maxLeanDisplayText)
+                            .font(.system(size: 24, weight: .bold).monospacedDigit())
+                            .foregroundStyle(Color.textSecondary)
+                            .contentTransition(.numericText())
+                            .animation(.easeOut(duration: 0.18), value: maxLeanDisplayText)
+                            .padding(.top, 8)
+
+                        Text("MAX LEAN")
+                            .font(.system(size: 10, weight: .semibold))
+                            .kerning(1.5)
+                            .foregroundStyle(Color.textGhost)
+                    }
+                }
+                .padding(.top, 18)
+
+                Spacer()
+
+                // Bottom controls
+                VStack(spacing: 10) {
+                    if !recorder.isRecording {
+                        Button {
+                            motion.calibrateUpright()
+                        } label: {
+                            Text("Calibrate Lean Sensor")
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundStyle(Color.textSecondary)
+                        }
+                    }
+
+                    Button {
+                        if recorder.isRecording {
+                            awaitingSavePrompt = true
+                            recorder.stop()
+                        } else {
+                            recorder.start(motion: motion, location: location, sampleHz: 10)
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: recorder.isRecording ? "stop.fill" : "play.fill")
+                                .font(.system(size: 20, weight: .bold))
+                            Text(recorder.isRecording ? "Stop Ride" : "Start Ride")
+                                .font(.system(size: 20, weight: .bold))
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, minHeight: 60)
+                        .background(recorder.isRecording ? Color.red : Color.appAccent)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .padding(.bottom, 12)
+            }
+        }
+        .onChange(of: location.lat) { _, _ in centerOnUserIfNeeded() }
+        .onChange(of: location.lon) { _, _ in centerOnUserIfNeeded() }
+        .onChange(of: recorder.summary) { _, _ in maybePresentSavePrompt() }
+        .onChange(of: recorder.fileURL) { _, _ in maybePresentSavePrompt() }
+        .onChange(of: recorder.isRecording) { _, isRec in
+            if !isRec { maybePresentSavePrompt() }
+        }
+        .alert("Ride too short to save", isPresented: $showTooShortAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Record a little longer so we can capture enough data.")
+        }
+        .alert("Ride name already exists", isPresented: $showDuplicateAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Please choose a different name.")
+        }
+        .confirmationDialog("Save this ride?", isPresented: $showSavePrompt, titleVisibility: .visible) {
+            Button("Save") { showNameSheet = true }
+            Button("Don't Save", role: .destructive) { }
+            Button("Cancel", role: .cancel) { }
+        }
+        .sheet(isPresented: $showNameSheet) {
+            SaveRideSheet(
+                name: $pendingName,
+                selectedImage: $pendingRidePhoto,
+                selectedBikeID: $pendingRideBikeID,
+                bikes: garageStore.bikes,
+                onSave: {
+                    guard let s = recorder.summary,
+                          let log = recorder.fileURL else {
+                        showNameSheet = false
+                        return
+                    }
+
+                    let trimmed = pendingName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let finalName = trimmed.isEmpty ? defaultRideName() : trimmed
+
+                    if rideStore.hasRide(named: finalName) {
+                        reopenNameSheetAfterDuplicate = true
+                        showDuplicateAlert = true
+                        return
+                    }
+
+                    let savedRide = rideStore.saveRide(
+                        name: finalName,
+                        summary: s,
+                        route: recorder.route,
+                        logTempURL: log,
+                        rideBikeID: pendingRideBikeID,
+                        ridePhoto: pendingRidePhoto
+                    )
+                    guard let savedRide else {
+                        reopenNameSheetAfterDuplicate = true
+                        showDuplicateAlert = true
+                        return
+                    }
+
+                    if cloudSyncEnabled, let userID = authService.userID {
+                        let photo = pendingRidePhoto
+                        Task {
+                            if let remoteID = try? await CloudRideStore().syncRide(savedRide, userID: userID, photo: photo) {
+                                let path = photo != nil ? CloudRideStore().photoStoragePath(userID: userID, rideID: savedRide.id) : nil
+                                _ = rideStore.updateCloudInfo(id: savedRide.id, remoteID: remoteID, cloudPhotoPath: path)
+                            }
+                        }
+                    }
+
+                    rideStore.load()
+                    pendingRideBikeID = nil
+                    pendingRidePhoto = nil
+                    showNameSheet = false
+                },
+                onCancel: {
+                    pendingRideBikeID = nil
+                    pendingRidePhoto = nil
+                    showNameSheet = false
+                }
+            )
+            .presentationDetents([.height(390)])
+        }
+    }
+
+    // MARK: - Ride Recording Computed Properties
+
+    private var speedDisplayText: String {
+        guard let mps = location.speedMps, mps > 0.5 else { return "0" }
+        return String(Int((mps * 2.23693629).rounded()))
+    }
+
+    private var liveLeanDisplayText: String {
+        String(format: "%.0f°", abs(motion.leanDeg))
+    }
+
+    private var maxLeanDisplayText: String {
+        if recorder.isRecording {
+            return String(format: "%.0f°", recorder.liveMaxAbsLeanDeg)
+        }
+        return String(format: "%.0f°", recorder.summary?.maxAbsLeanDeg ?? 0)
+    }
+
+    private var recordingTime: String {
+        recorder.summary?.durationText ?? (recorder.isRecording ? "0:00:00" : "—")
+    }
+
+    private var recordingDistance: String {
+        guard let s = recorder.summary else { return recorder.isRecording ? "0.00 mi" : "—" }
+        return String(format: "%.2f mi", s.distanceMi)
+    }
+
+    private func rideTopStat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .kerning(1.0)
+                .foregroundStyle(Color.textGhost)
+            Text(value)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.textPrimary)
+                .monospacedDigit()
+        }
+    }
+
+    // MARK: - Calendar View
+
     private var calendarView: some View {
         NavigationStack {
             ScrollViewReader { proxy in
                 ScrollView {
                     if rideStore.rides.isEmpty {
-                        VStack(spacing: 10) {
+                        VStack(spacing: 12) {
                             Image(systemName: "speedometer")
-                                .font(.system(size: 40, weight: .semibold))
-                                .foregroundStyle(Color.appAccent.opacity(0.60))
+                                .font(.system(size: 44, weight: .semibold))
+                                .foregroundStyle(Color.appAccent)
                             Text("No rides yet")
-                                .font(.headline)
-                                .foregroundStyle(Color(white: 0.45))
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(Color.textPrimary)
                             Text("Tap Start Ride to begin tracking.")
                                 .font(.subheadline)
-                                .foregroundStyle(Color(white: 0.35))
+                                .foregroundStyle(Color.textSecondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 60)
+                        .padding(.top, 80)
                     } else {
-                        LazyVGrid(
-                            columns: [
-                                GridItem(.flexible(), spacing: 12)
-                            ],
-                            spacing: 12
-                        ) {
-                            ForEach(rideStore.rides) { ride in
-                                Button {
-                                    expandedRideID = ride.id
-                                } label: {
-                                    calendarRideCard(ride)
+                        LazyVStack(alignment: .leading, spacing: 12, pinnedViews: [.sectionHeaders]) {
+                            ForEach(ridesByMonth) { group in
+                                Section {
+                                    ForEach(group.rides) { ride in
+                                        Button {
+                                            expandedRideID = ride.id
+                                        } label: {
+                                            calendarRideCard(ride)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .id(ride.id)
+                                    }
+                                } header: {
+                                    Text(group.month.uppercased())
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .kerning(0.8)
+                                        .foregroundStyle(Color.textGhost)
+                                        .padding(.horizontal, 16)
+                                        .padding(.top, 16)
+                                        .padding(.bottom, 2)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(Color.appBg)
                                 }
-                                .buttonStyle(.plain)
-                                .id(ride.id)
                             }
                         }
                         .padding(.horizontal, 12)
-                        .padding(.top, 12)
                         .padding(.bottom, 120)
                     }
                 }
@@ -283,9 +536,9 @@ struct ContentView: View {
 
     private var calendarHeader: some View {
         HStack {
-            Text("Calendar")
+            Text("Rides")
                 .font(.system(size: 34, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.textPrimary)
             Spacer()
             HStack(spacing: 16) {
                 Button {
@@ -312,261 +565,110 @@ struct ContentView: View {
 
     private func calendarRideCard(_ ride: SavedRide) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Top accent stripe
-            Rectangle()
-                .fill(Color.appAccent)
-                .frame(height: 3)
-                .clipShape(UnevenRoundedRectangle(
-                    topLeadingRadius: 14, bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0, topTrailingRadius: 14,
-                    style: .continuous
-                ))
-
-            VStack(alignment: .leading, spacing: 8) {
+            // Ember header band — structural, full-width
+            HStack(spacing: 8) {
                 Text(ride.name)
-                    .font(.title3.weight(.semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.55))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(Color.appAccent)
 
-                HStack(spacing: 8) {
-                    Text(calendarDateTime(ride.createdAt))
-                        .font(.caption)
-                        .foregroundStyle(Color(white: 0.50))
-                    if let bikeName = bikeName(for: ride) {
+            // Stats body
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 5) {
+                    Text(calendarDateShort(ride.createdAt))
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Color.textTertiary)
+                    if let name = bikeName(for: ride) {
                         Text("·")
-                            .foregroundStyle(Color(white: 0.35))
-                        Text(bikeName)
-                            .font(.caption)
-                            .foregroundStyle(Color.appAccent.opacity(0.85))
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.textGhost)
+                        Text(name)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(Color.appAccent.opacity(0.80))
+                            .lineLimit(1)
                     }
                 }
 
-                Rectangle()
-                    .fill(Color.appDivider)
-                    .frame(height: 1)
-                    .padding(.vertical, 2)
-
-                calendarStatRow("Time", rideMetricText(ride, field: .duration))
-                calendarStatRow("Max Speed", rideMetricText(ride, field: .maxSpeed))
-                calendarStatRow("Avg Speed", rideMetricText(ride, field: .averageSpeed))
-                calendarStatRow("Max Lean", rideMetricText(ride, field: .maxLean))
-                calendarStatRow("Distance", rideMetricText(ride, field: .distance))
+                HStack(spacing: 0) {
+                    rideCardStat("DIST", rideMetricText(ride, field: .distance))
+                    Spacer()
+                    rideCardStat("TIME", rideMetricText(ride, field: .duration))
+                    Spacer()
+                    rideCardStat("MAX LEAN", rideMetricText(ride, field: .maxLean))
+                }
             }
-            .padding(12)
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 12)
+            .background(Color.appSurface)
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private func calendarStatRow(_ label: String, _ value: String) -> some View {
-        HStack(spacing: 6) {
+    private func rideCardStat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
             Text(label)
-                .font(.subheadline)
-                .foregroundStyle(Color(white: 0.50))
-            Spacer(minLength: 8)
+                .font(.system(size: 10, weight: .semibold))
+                .kerning(0.5)
+                .foregroundStyle(Color.textGhost)
             Text(value)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.textPrimary)
         }
     }
 
-    private var firstRideIDByDay: [Date: UUID] {
-        var out: [Date: UUID] = [:]
-        let calendar = Calendar.current
-        for ride in rideStore.rides {
-            let day = calendar.startOfDay(for: ride.createdAt)
-            if out[day] == nil {
-                out[day] = ride.id
-            }
-        }
-        return out
+    private func calendarDateShort(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, h:mm a"
+        return formatter.string(from: date)
     }
 
-    private func rideMetricText(_ ride: SavedRide, field: RideMetricField) -> String {
-        let availability = ride.metricAvailability ?? .allAvailable
-        switch field {
-        case .duration:
-            return availability.hasDuration ? ride.summary.durationText : "N/A"
-        case .maxSpeed:
-            return availability.hasMaxSpeed ? String(format: "%.1f mph", ride.summary.maxSpeedMph) : "N/A"
-        case .averageSpeed:
-            return availability.hasAverageSpeed ? String(format: "%.1f mph", averageSpeedMph(for: ride.summary)) : "N/A"
-        case .maxLean:
-            return availability.hasMaxLean ? String(format: "%.0f°", ride.summary.maxAbsLeanDeg) : "N/A"
-        case .distance:
-            return availability.hasDistance ? String(format: "%.2f mi", ride.summary.distanceMi) : "N/A"
-        }
+    private struct MonthGroup: Identifiable {
+        var id: String { month }
+        let month: String
+        var rides: [SavedRide]
     }
 
-    private var rideRecordingView: some View {
-        Map(position: $position, interactionModes: .all) {
-            UserAnnotation()
-        }
-        .mapControls {
-            MapUserLocationButton()
-            MapCompass()
-            MapScaleView()
-        }
-        .onChange(of: location.lat) { _, _ in centerOnUserIfNeeded() }
-        .onChange(of: location.lon) { _, _ in centerOnUserIfNeeded() }
-        .onChange(of: recorder.summary) { _, _ in maybePresentSavePrompt() }
-        .onChange(of: recorder.fileURL) { _, _ in maybePresentSavePrompt() }
-        .onChange(of: recorder.isRecording) { _, isRec in
-            if !isRec { maybePresentSavePrompt() }
-        }
-        .alert("Ride too short to save", isPresented: $showTooShortAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Record a little longer so we can capture enough data.")
-        }
-        .alert("Ride name already exists", isPresented: $showDuplicateAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Please choose a different name.")
-        }
-        .overlay(alignment: .topLeading) {
-            VStack(alignment: .leading, spacing: 5) {
-                statsHUDRow("Speed", formatSpeed(location.speedMps))
-                statsHUDRow("Lean", String(format: "%.1f°", motion.leanDeg))
-                statsHUDRow("GPS", formatGPS(lat: location.lat, lon: location.lon))
+    private var ridesByMonth: [MonthGroup] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "LLLL yyyy"
+        let sorted = rideStore.rides.sorted { $0.createdAt > $1.createdAt }
+        var groups: [String: [SavedRide]] = [:]
+        var order: [String] = []
+        for ride in sorted {
+            let month = formatter.string(from: ride.createdAt)
+            if groups[month] == nil {
+                groups[month] = []
+                order.append(month)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Color.appSurface.opacity(0.90))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.appDivider, lineWidth: 1)
-            }
-            .padding(.leading, 14)
-            .padding(.top, 20)
+            groups[month]!.append(ride)
         }
-        .overlay(alignment: .bottomLeading) {
-            Button {
-                motion.calibrateUpright()
-            } label: {
-                Image(systemName: "scope")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.appAccent)
-                    .frame(width: 52, height: 52)
-                    .background(Color.appSurface.opacity(0.92))
-                    .clipShape(Circle())
-                    .overlay {
-                        Circle().stroke(Color.appDivider, lineWidth: 1)
-                    }
-            }
-            .disabled(recorder.isRecording)
-            .opacity(recorder.isRecording ? 0.35 : 1.0)
-            .padding(.leading, 18)
-            .padding(.bottom, 96)
-        }
-        .overlay(alignment: .bottom) {
-            Button {
-                if recorder.isRecording {
-                    awaitingSavePrompt = true
-                    recorder.stop()
-                } else {
-                    recorder.start(motion: motion, location: location, sampleHz: 10)
-                }
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: recorder.isRecording ? "stop.fill" : "play.fill")
-                        .font(.system(size: 20, weight: .bold))
-                    Text(recorder.isRecording ? "Stop Ride" : "Start Ride")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity, minHeight: 56)
-                .background(recorder.isRecording ? Color.red : Color.appAccent)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .shadow(
-                    color: (recorder.isRecording ? Color.red : Color.appAccent).opacity(0.40),
-                    radius: 10, x: 0, y: 4
-                )
-            }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 8)
-        }
-        .confirmationDialog("Save this ride?", isPresented: $showSavePrompt, titleVisibility: .visible) {
-            Button("Save") { showNameSheet = true }
-            Button("Don’t Save", role: .destructive) { }
-            Button("Cancel", role: .cancel) { }
-        }
-        .sheet(isPresented: $showNameSheet) {
-            SaveRideSheet(
-                name: $pendingName,
-                selectedImage: $pendingRidePhoto,
-                selectedBikeID: $pendingRideBikeID,
-                bikes: garageStore.bikes,
-                onSave: {
-                    guard let s = recorder.summary,
-                          let log = recorder.fileURL else {
-                        showNameSheet = false
-                        return
-                    }
-
-                    let trimmed = pendingName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let finalName = trimmed.isEmpty ? defaultRideName() : trimmed
-
-                    if rideStore.hasRide(named: finalName) {
-                        reopenNameSheetAfterDuplicate = true
-                        showDuplicateAlert = true
-                        return
-                    }
-
-                    let savedRide = rideStore.saveRide(
-                        name: finalName,
-                        summary: s,
-                        route: recorder.route,
-                        logTempURL: log,
-                        rideBikeID: pendingRideBikeID,
-                        ridePhoto: pendingRidePhoto
-                    )
-                    guard let savedRide else {
-                        reopenNameSheetAfterDuplicate = true
-                        showDuplicateAlert = true
-                        return
-                    }
-
-                    if cloudSyncEnabled, let userID = authService.userID {
-                        let photo = pendingRidePhoto
-                        Task {
-                            if let remoteID = try? await CloudRideStore().syncRide(savedRide, userID: userID, photo: photo) {
-                                let path = photo != nil ? CloudRideStore().photoStoragePath(userID: userID, rideID: savedRide.id) : nil
-                                _ = rideStore.updateCloudInfo(id: savedRide.id, remoteID: remoteID, cloudPhotoPath: path)
-                            }
-                        }
-                    }
-
-                    rideStore.load()
-                    pendingRideBikeID = nil
-                    pendingRidePhoto = nil
-                    showNameSheet = false
-                },
-                onCancel: {
-                    pendingRideBikeID = nil
-                    pendingRidePhoto = nil
-                    showNameSheet = false
-                }
-            )
-            .presentationDetents([.height(390)])
-        }
+        return order.map { MonthGroup(month: $0, rides: groups[$0] ?? []) }
     }
+
+    // MARK: - Bottom Navigation Bar
 
     private var bottomNavigationBar: some View {
         HStack(spacing: 0) {
-            navBarButton(title: "Calendar", systemImage: "calendar", tab: .calendar)
+            navBarButton(title: "Rides", systemImage: "calendar", tab: .calendar)
             navBarButton(title: "Ride", systemImage: "speedometer", tab: .ride)
             navBarButton(title: "Share", systemImage: "square.and.arrow.up", tab: .share)
             navBarButton(title: "Garage", systemImage: "car.fill", tab: .garage)
+            navBarButton(title: "Profile", systemImage: "person.fill", tab: .profile)
             navBarButton(title: "Settings", systemImage: "gear", tab: .settings)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 12)
+        .padding(.top, 10)
         .padding(.bottom, 2)
-        .background(Color.appBg.ignoresSafeArea(edges: .bottom))
+        .background(Color.appSurface.ignoresSafeArea(edges: .bottom))
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(Color.appDivider)
@@ -575,27 +677,28 @@ struct ContentView: View {
     }
 
     private func navBarButton(title: String, systemImage: String, tab: Tab) -> some View {
-        Button {
+        let isActive = selectedTab == tab
+        return Button {
             selectedTab = tab
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 21, weight: selectedTab == tab ? .semibold : .regular))
+                    .font(.system(size: isActive ? 20 : 18, weight: isActive ? .semibold : .regular))
                 Text(title)
-                    .font(.system(size: 11, weight: selectedTab == tab ? .semibold : .regular))
+                    .font(.system(size: 9, weight: isActive ? .semibold : .regular))
             }
-            .foregroundStyle(selectedTab == tab ? Color.appAccent : Color(white: 0.40))
+            .foregroundStyle(isActive ? Color.appAccent : Color.textGhost)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
         }
+        .animation(.easeOut(duration: 0.15), value: isActive)
     }
 
-    // MARK: - Reliable save prompt logic
+    // MARK: - Save Prompt Logic
 
     private func maybePresentSavePrompt() {
         guard awaitingSavePrompt else { return }
 
-        // If summary/file are present, finalize using a duration threshold.
         if let summary = recorder.summary, recorder.fileURL != nil {
             awaitingSavePrompt = false
             saveFinalizeRetryPending = false
@@ -610,8 +713,6 @@ struct ContentView: View {
             return
         }
 
-        // Stop() flips isRecording first, then publishes summary/file.
-        // Give one short retry window before failing.
         if recorder.isRecording == false, !saveFinalizeRetryPending {
             saveFinalizeRetryPending = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
@@ -651,40 +752,38 @@ struct ContentView: View {
         return "Ride \(DateFormatter.localizedString(from: now, dateStyle: .medium, timeStyle: .short))"
     }
 
-    private func statsHUDRow(_ label: String, _ value: String) -> some View {
-        HStack(spacing: 6) {
-            Text(label)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(Color(white: 0.50))
-                .frame(width: 38, alignment: .leading)
-            Text(value)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white)
-        }
-    }
-
-    private func formatSpeed(_ mps: Double?) -> String {
-        guard let mps else { return "—" }
-        let mph = mps * 2.23693629
-        return String(format: "%.1f mph", mph)
-    }
-
-    private func formatGPS(lat: Double?, lon: Double?) -> String {
-        guard let lat, let lon else { return "—" }
-        return String(format: "%.5f, %.5f", lat, lon)
-    }
-
     private func averageSpeedMph(for summary: RideSummary) -> Double {
         guard summary.durationSec > 0 else { return 0 }
         let avgMps = summary.distanceM / summary.durationSec
         return avgMps * 2.23693629
     }
 
-    private func calendarDateTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+    private var firstRideIDByDay: [Date: UUID] {
+        var out: [Date: UUID] = [:]
+        let calendar = Calendar.current
+        for ride in rideStore.rides {
+            let day = calendar.startOfDay(for: ride.createdAt)
+            if out[day] == nil {
+                out[day] = ride.id
+            }
+        }
+        return out
+    }
+
+    private func rideMetricText(_ ride: SavedRide, field: RideMetricField) -> String {
+        let availability = ride.metricAvailability ?? .allAvailable
+        switch field {
+        case .duration:
+            return availability.hasDuration ? ride.summary.durationText : "N/A"
+        case .maxSpeed:
+            return availability.hasMaxSpeed ? String(format: "%.1f mph", ride.summary.maxSpeedMph) : "N/A"
+        case .averageSpeed:
+            return availability.hasAverageSpeed ? String(format: "%.1f mph", averageSpeedMph(for: ride.summary)) : "N/A"
+        case .maxLean:
+            return availability.hasMaxLean ? String(format: "%.0f°", ride.summary.maxAbsLeanDeg) : "N/A"
+        case .distance:
+            return availability.hasDistance ? String(format: "%.2f mi", ride.summary.distanceMi) : "N/A"
+        }
     }
 
     private func ridePhotoImage(for ride: SavedRide) -> UIImage? {
@@ -724,6 +823,8 @@ struct ContentView: View {
         }
     }
 }
+
+// MARK: - Supporting Types
 
 private enum RideMetricField {
     case duration
@@ -769,6 +870,8 @@ private struct ImportedRideDraft {
     }
 }
 
+// MARK: - Import Ride Sheet
+
 private struct ImportRideSheet: View {
     let draft: ImportedRideDraft
     let bikes: [GarageBike]
@@ -804,32 +907,28 @@ private struct ImportRideSheet: View {
                 .datePickerStyle(.compact)
 
             Menu {
-                Button("No bike") {
-                    selectedBikeID = nil
-                }
+                Button("No bike") { selectedBikeID = nil }
                 ForEach(bikes) { bike in
-                    Button(bike.title) {
-                        selectedBikeID = bike.id
-                    }
+                    Button(bike.title) { selectedBikeID = bike.id }
                 }
             } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Bike Used")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.textSecondary)
                         Text(selectedBikeLabel)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(Color.textPrimary)
                             .lineLimit(1)
                     }
                     Spacer()
                     Image(systemName: "chevron.down")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .background(.thinMaterial)
+                .background(Color.appSurface2)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
 
@@ -841,21 +940,18 @@ private struct ImportRideSheet: View {
                 importStatRow("Distance", text(for: .distance))
             }
             .padding(10)
-            .background(.thinMaterial)
+            .background(Color.appSurface2)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             HStack {
-                Button("Cancel") {
-                    onCancel()
-                }
-                .buttonStyle(.bordered)
-
+                Button("Cancel") { onCancel() }
+                    .buttonStyle(.bordered)
                 Spacer()
-
                 Button("Import Ride") {
                     onImport(draft.updated(name: draftName, createdAt: draftDate, bikeID: selectedBikeID))
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(Color.appAccent)
             }
         }
         .padding(14)
@@ -874,10 +970,11 @@ private struct ImportRideSheet: View {
         HStack {
             Text(label)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.textSecondary)
             Spacer()
             Text(value)
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.textPrimary)
         }
     }
 
@@ -901,6 +998,8 @@ private struct ImportRideSheet: View {
     }
 }
 
+// MARK: - GPX Parsing
+
 private struct ParsedGPXRide {
     let defaultCreatedAt: Date
     let summary: RideSummary
@@ -914,10 +1013,8 @@ private enum GPXRideParserError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unreadableFile:
-            return "The selected GPX file could not be read."
-        case .invalidGPX:
-            return "The selected GPX file does not contain usable track data."
+        case .unreadableFile: return "The selected GPX file could not be read."
+        case .invalidGPX: return "The selected GPX file does not contain usable track data."
         }
     }
 }
@@ -936,9 +1033,7 @@ private struct GPXRideParser {
 
         let points = delegate.points
         let route = points.map { RidePoint(lat: $0.lat, lon: $0.lon) }
-        guard !route.isEmpty else {
-            throw GPXRideParserError.invalidGPX
-        }
+        guard !route.isEmpty else { throw GPXRideParserError.invalidGPX }
 
         let timedPoints = points.compactMap { point -> (Date, GPXTrackPoint)? in
             guard let time = point.time else { return nil }
@@ -986,12 +1081,7 @@ private struct GPXRideParser {
 
     private func totalDistance(for points: [GPXTrackPoint]) -> Double {
         zip(points, points.dropFirst()).reduce(0) { partial, pair in
-            partial + haversineMeters(
-                lat1: pair.0.lat,
-                lon1: pair.0.lon,
-                lat2: pair.1.lat,
-                lon2: pair.1.lon
-            )
+            partial + haversineMeters(lat1: pair.0.lat, lon1: pair.0.lon, lat2: pair.1.lat, lon2: pair.1.lon)
         }
     }
 
@@ -1000,16 +1090,9 @@ private struct GPXRideParser {
         for pair in zip(timedPoints, timedPoints.dropFirst()) {
             let delta = pair.1.0.timeIntervalSince(pair.0.0)
             guard delta > 0 else { continue }
-            let distance = haversineMeters(
-                lat1: pair.0.1.lat,
-                lon1: pair.0.1.lon,
-                lat2: pair.1.1.lat,
-                lon2: pair.1.1.lon
-            )
+            let distance = haversineMeters(lat1: pair.0.1.lat, lon1: pair.0.1.lon, lat2: pair.1.1.lat, lon2: pair.1.1.lon)
             let speed = distance / delta
-            if speed.isFinite {
-                maxSpeed = max(maxSpeed ?? speed, speed)
-            }
+            if speed.isFinite { maxSpeed = max(maxSpeed ?? speed, speed) }
         }
         return maxSpeed
     }
@@ -1049,7 +1132,7 @@ private final class GPXParserDelegate: NSObject, XMLParserDelegate {
                 didStartElement elementName: String,
                 namespaceURI: String?,
                 qualifiedName qName: String?,
-                attributes attributeDict: [String : String] = [:]) {
+                attributes attributeDict: [String: String] = [:]) {
         currentValue = ""
         if elementName == "trkpt" {
             currentLat = attributeDict["lat"].flatMap(Double.init)
@@ -1084,14 +1167,14 @@ private final class GPXParserDelegate: NSObject, XMLParserDelegate {
     }
 
     private func parseDate(_ text: String) -> Date? {
-        if let date = isoFormatter.date(from: text) {
-            return date
-        }
+        if let date = isoFormatter.date(from: text) { return date }
         let fallback = ISO8601DateFormatter()
         fallback.formatOptions = [.withInternetDateTime]
         return fallback.date(from: text)
     }
 }
+
+// MARK: - Ride Detail Screen
 
 private struct RideDetailScreen: View {
     private enum PhotoPickerSource: String, Identifiable {
@@ -1102,10 +1185,8 @@ private struct RideDetailScreen: View {
 
         var uiKitSourceType: UIImagePickerController.SourceType {
             switch self {
-            case .camera:
-                return .camera
-            case .library:
-                return .photoLibrary
+            case .camera: return .camera
+            case .library: return .photoLibrary
             }
         }
     }
@@ -1113,6 +1194,7 @@ private struct RideDetailScreen: View {
     let ride: SavedRide
     let initialPhoto: UIImage?
     let bikes: [GarageBike]
+    let onExportJSONL: (() -> URL?)?
     let onClose: () -> Void
     let onRename: (String) -> RideStore.RenameRideResult
     let onSetBike: (UUID?) -> RideStore.SetRideBikeResult
@@ -1131,10 +1213,14 @@ private struct RideDetailScreen: View {
     @State private var showPhotoSourceDialog = false
     @State private var showPhotoSaveFailedAlert = false
     @State private var photoPickerSource: PhotoPickerSource?
+    @State private var exportURL: URL?
+    @State private var showExportSheet = false
+    @State private var showExportFailedAlert = false
 
     init(ride: SavedRide,
          initialPhoto: UIImage?,
          bikes: [GarageBike],
+         onExportJSONL: (() -> URL?)? = nil,
          onClose: @escaping () -> Void,
          onRename: @escaping (String) -> RideStore.RenameRideResult,
          onSetBike: @escaping (UUID?) -> RideStore.SetRideBikeResult,
@@ -1144,6 +1230,7 @@ private struct RideDetailScreen: View {
         self.ride = ride
         self.initialPhoto = initialPhoto
         self.bikes = bikes
+        self.onExportJSONL = onExportJSONL
         self.onClose = onClose
         self.onRename = onRename
         self.onSetBike = onSetBike
@@ -1160,18 +1247,15 @@ private struct RideDetailScreen: View {
             Color.appBg.ignoresSafeArea()
 
             VStack(spacing: 12) {
+                // Header bar
                 HStack {
-                    Button {
-                        onClose()
-                    } label: {
+                    Button { onClose() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 28, weight: .semibold))
-                            .foregroundStyle(Color(white: 0.45))
+                            .font(.system(size: 28))
+                            .foregroundStyle(Color.textGhost)
                     }
                     Spacer()
-                    Button {
-                        onShare()
-                    } label: {
+                    Button { onShare() } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "square.and.arrow.up")
                             Text("Share")
@@ -1184,128 +1268,129 @@ private struct RideDetailScreen: View {
                         .clipShape(Capsule())
                     }
                 }
+                .padding(.horizontal, 4)
 
-                VStack(alignment: .leading, spacing: 14) {
-                    TextField("Ride name", text: $draftName)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.title3.weight(.semibold))
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Name field
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextField("Ride name", text: $draftName)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.title3.weight(.semibold))
 
-                    Button("Save Name") {
-                        switch onRename(draftName) {
-                        case .success:
-                            break
-                        case .duplicateName:
-                            showDuplicateAlert = true
-                        case .notFound, .writeFailed:
-                            showRenameFailedAlert = true
-                        }
-                    }
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.appAccent)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Color.appAccent.opacity(0.12))
-                    .clipShape(Capsule())
-
-                    Menu {
-                        Button("No bike") {
-                            switch onSetBike(nil) {
-                            case .success:
-                                selectedBikeID = nil
-                            case .notFound, .writeFailed:
-                                showBikeSaveFailedAlert = true
-                            }
-                        }
-
-                        ForEach(bikes) { bike in
-                            Button(bike.title) {
-                                switch onSetBike(bike.id) {
-                                case .success:
-                                    selectedBikeID = bike.id
-                                case .notFound, .writeFailed:
-                                    showBikeSaveFailedAlert = true
+                            Button("Save Name") {
+                                switch onRename(draftName) {
+                                case .success: break
+                                case .duplicateName: showDuplicateAlert = true
+                                case .notFound, .writeFailed: showRenameFailedAlert = true
                                 }
                             }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.appAccent)
                         }
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Bike Used")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(selectedBikeLabel)
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(1)
+
+                        // Bike picker
+                        Menu {
+                            Button("No bike") {
+                                switch onSetBike(nil) {
+                                case .success: selectedBikeID = nil
+                                case .notFound, .writeFailed: showBikeSaveFailedAlert = true
+                                }
                             }
-                            Spacer()
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(.thinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-
-                    Button {
-                        showPhotoSourceDialog = true
-                    } label: {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(Color.secondary.opacity(0.14))
-                                .frame(height: 170)
-
-                            if let photoImage {
-                                Image(uiImage: photoImage)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(height: 170)
-                                    .clipped()
-                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            } else {
-                                VStack(spacing: 6) {
-                                    Image(systemName: "photo.on.rectangle")
-                                        .font(.system(size: 26, weight: .semibold))
-                                    Text("Add Ride Photo")
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("Tap to upload or take photo")
+                            ForEach(bikes) { bike in
+                                Button(bike.title) {
+                                    switch onSetBike(bike.id) {
+                                    case .success: selectedBikeID = bike.id
+                                    case .notFound, .writeFailed: showBikeSaveFailedAlert = true
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Bike Used")
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(Color.textTertiary)
+                                    Text(selectedBikeLabel)
+                                        .foregroundStyle(Color.textPrimary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Color.textSecondary)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(Color.appSurface2)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+
+                        // Photo
+                        Button { showPhotoSourceDialog = true } label: {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(Color.appSurface2)
+                                    .frame(height: 160)
+
+                                if let photoImage {
+                                    Image(uiImage: photoImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(height: 160)
+                                        .clipped()
+                                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                } else {
+                                    VStack(spacing: 6) {
+                                        Image(systemName: "photo.on.rectangle")
+                                            .font(.system(size: 24, weight: .regular))
+                                            .foregroundStyle(Color.textTertiary)
+                                        Text("Add Ride Photo")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(Color.textSecondary)
+                                    }
                                 }
                             }
                         }
+                        .buttonStyle(.plain)
+
+                        Rectangle()
+                            .fill(Color.appDivider)
+                            .frame(height: 1)
+
+                        // Date
+                        Text(dateTimeText(ride.createdAt))
+                            .font(.subheadline)
+                            .foregroundStyle(Color.textTertiary)
+
+                        // Stats
+                        VStack(spacing: 10) {
+                            detailRow("Total Time", metricText(.duration))
+                            detailRow("Max Speed", metricText(.maxSpeed))
+                            detailRow("Avg Speed", metricText(.averageSpeed))
+                            detailRow("Max Lean", metricText(.maxLean))
+                            detailRow("Distance", metricText(.distance))
+                        }
+
+                        if onExportJSONL != nil {
+                            SecondaryButton(title: "Export JSONL") {
+                                if let url = onExportJSONL?() {
+                                    exportURL = url
+                                    showExportSheet = true
+                                } else {
+                                    showExportFailedAlert = true
+                                }
+                            }
+                        }
+
+                        Spacer(minLength: 20)
+
+                        PrimaryButton(title: "Delete Ride", isDestructive: true) {
+                            showDeleteConfirm = true
+                        }
                     }
-                    .buttonStyle(.plain)
-
-                    Rectangle()
-                        .fill(Color.appDivider)
-                        .frame(height: 1)
-
-                    Text(dateTimeText(ride.createdAt))
-                        .font(.subheadline)
-                        .foregroundStyle(Color(white: 0.50))
-
-                    detailRow("Total Time", metricText(.duration))
-                    detailRow("Max Speed", metricText(.maxSpeed))
-                    detailRow("Avg Speed", metricText(.averageSpeed))
-                    detailRow("Max Lean", metricText(.maxLean))
-                    detailRow("Distance", metricText(.distance))
-
-                    Spacer()
-
-                    Button("Delete Ride") {
-                        showDeleteConfirm = true
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .background(Color.red.opacity(0.85))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(16)
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .background(Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
@@ -1313,37 +1398,25 @@ private struct RideDetailScreen: View {
         }
         .alert("Ride name already exists", isPresented: $showDuplicateAlert) {
             Button("OK", role: .cancel) { }
-        } message: {
-            Text("Please choose a different name.")
-        }
+        } message: { Text("Please choose a different name.") }
         .alert("Could not save name", isPresented: $showRenameFailedAlert) {
             Button("OK", role: .cancel) { }
-        } message: {
-            Text("Please try again.")
-        }
+        } message: { Text("Please try again.") }
         .alert("Could not save bike", isPresented: $showBikeSaveFailedAlert) {
             Button("OK", role: .cancel) { }
-        } message: {
-            Text("Please try again.")
-        }
+        } message: { Text("Please try again.") }
         .confirmationDialog("Ride Photo", isPresented: $showPhotoSourceDialog, titleVisibility: .visible) {
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                Button("Take Photo") {
-                    photoPickerSource = .camera
-                }
+                Button("Take Photo") { photoPickerSource = .camera }
             }
-            Button("Choose Photo") {
-                photoPickerSource = .library
-            }
+            Button("Choose Photo") { photoPickerSource = .library }
             Button("Cancel", role: .cancel) { }
         }
         .sheet(item: $photoPickerSource) { source in
             UIKitImagePicker(sourceType: source.uiKitSourceType) { image in
                 switch onSetPhoto(image) {
-                case .success:
-                    photoImage = image
-                case .notFound, .writeFailed:
-                    showPhotoSaveFailedAlert = true
+                case .success: photoImage = image
+                case .notFound, .writeFailed: showPhotoSaveFailedAlert = true
                 }
             }
             .ignoresSafeArea()
@@ -1351,25 +1424,25 @@ private struct RideDetailScreen: View {
         .alert("Delete this ride?", isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) {
                 switch onDelete() {
-                case .success:
-                    onClose()
-                case .notFound, .deleteFailed:
-                    showDeleteFailedAlert = true
+                case .success: onClose()
+                case .notFound, .deleteFailed: showDeleteFailedAlert = true
                 }
             }
             Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("This action cannot be undone.")
-        }
+        } message: { Text("This action cannot be undone.") }
         .alert("Could not delete ride", isPresented: $showDeleteFailedAlert) {
             Button("OK", role: .cancel) { }
-        } message: {
-            Text("Please try again.")
-        }
+        } message: { Text("Please try again.") }
         .alert("Could not save photo", isPresented: $showPhotoSaveFailedAlert) {
             Button("OK", role: .cancel) { }
-        } message: {
-            Text("Please try again.")
+        } message: { Text("Please try again.") }
+        .alert("Export Failed", isPresented: $showExportFailedAlert) {
+            Button("OK", role: .cancel) { }
+        } message: { Text("The ride file could not be exported.") }
+        .sheet(isPresented: $showExportSheet) {
+            if let url = exportURL {
+                ActivityView(activityItems: [url])
+            }
         }
     }
 
@@ -1377,18 +1450,17 @@ private struct RideDetailScreen: View {
         HStack {
             Text(label)
                 .font(.subheadline)
-                .foregroundStyle(Color(white: 0.50))
+                .foregroundStyle(Color.textSecondary)
             Spacer()
             Text(value)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.textPrimary)
         }
     }
 
     private func averageSpeedMph(for summary: RideSummary) -> Double {
         guard summary.durationSec > 0 else { return 0 }
-        let avgMps = summary.distanceM / summary.durationSec
-        return avgMps * 2.23693629
+        return (summary.distanceM / summary.durationSec) * 2.23693629
     }
 
     private func dateTimeText(_ date: Date) -> String {
@@ -1423,6 +1495,8 @@ private struct RideDetailScreen: View {
     }
 }
 
+// MARK: - Ride Day Picker Sheet
+
 private struct RideDayPickerSheet: View {
     let rideDays: Set<Date>
     let onSelectDay: (Date) -> Void
@@ -1442,25 +1516,20 @@ private struct RideDayPickerSheet: View {
     var body: some View {
         VStack(spacing: 14) {
             HStack {
-                Button {
-                    shiftMonth(by: -1)
-                } label: {
+                Button { shiftMonth(by: -1) } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.appAccent)
                 }
-
                 Spacer()
-
                 Text(monthTitle(monthAnchor))
                     .font(.headline)
-
+                    .foregroundStyle(Color.textPrimary)
                 Spacer()
-
-                Button {
-                    shiftMonth(by: 1)
-                } label: {
+                Button { shiftMonth(by: 1) } label: {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.appAccent)
                 }
             }
 
@@ -1468,7 +1537,7 @@ private struct RideDayPickerSheet: View {
                 ForEach(weekdaySymbols(), id: \.self) { day in
                     Text(day)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textTertiary)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -1491,17 +1560,15 @@ private struct RideDayPickerSheet: View {
                                         .fill(Color.appAccent)
                                         .frame(width: 34, height: 34)
                                 }
-
                                 Text("\(day)")
                                     .font(.body.weight(.semibold))
-                                    .foregroundStyle(hasRide ? Color.white : Color.primary)
+                                    .foregroundStyle(hasRide ? Color.white : Color.textTertiary)
                             }
                             .frame(maxWidth: .infinity, minHeight: 36)
                         }
                         .buttonStyle(.plain)
                     } else {
-                        Color.clear
-                            .frame(maxWidth: .infinity, minHeight: 36)
+                        Color.clear.frame(maxWidth: .infinity, minHeight: 36)
                     }
                 }
             }
@@ -1509,12 +1576,13 @@ private struct RideDayPickerSheet: View {
             if rideDays.isEmpty {
                 Text("No ride days yet.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textSecondary)
                     .padding(.top, 8)
             }
         }
         .padding(16)
         .presentationDetents([.height(420)])
+        .presentationBackground(Color.appSurface)
     }
 
     private func shiftMonth(by amount: Int) {
@@ -1554,4 +1622,16 @@ private struct RideDayPickerSheet: View {
         formatter.dateFormat = "LLLL yyyy"
         return formatter.string(from: date)
     }
+}
+
+// MARK: - Activity View
+
+private struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

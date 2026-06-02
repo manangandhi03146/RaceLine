@@ -4,17 +4,12 @@ import UIKit
 
 struct ShareCardScreen: View {
     private enum ShareMetricField {
-        case duration
-        case maxSpeed
-        case averageSpeed
-        case maxLean
-        case distance
+        case duration, maxSpeed, averageSpeed, maxLean, distance
     }
 
     @EnvironmentObject var rideStore: RideStore
     @EnvironmentObject var garageStore: GarageStore
-    
-    // Current (unsaved) ride passed from ContentView
+
     let currentSummary: RideSummary?
     let currentRoute: [RidePoint]
     let currentLogURL: URL?
@@ -27,15 +22,13 @@ struct ShareCardScreen: View {
     @State private var title: String = "Ride"
     @State private var mode: ShareBackgroundMode = .fill
     @State private var textColor: Color = .white
+    @State private var routeColor: Color = .white
     @State private var showDuplicateAlert = false
     @State private var showNameSheet = false
     @State private var reopenNameSheetAfterDuplicate = false
     @State private var pendingName: String = ""
     @State private var pendingRidePhoto: UIImage?
     @State private var pendingRideBikeID: UUID?
-
-    // Dropdown selection key
-    // "current" or saved UUID string
     @State private var selectedKey: String = "current"
 
     private var hasCurrentRide: Bool {
@@ -49,21 +42,14 @@ struct ShareCardScreen: View {
 
     private var rideOptions: [(key: String, label: String)] {
         var out: [(String, String)] = []
-        let currentLabel: String
         if hasCurrentRide {
-            currentLabel = isCurrentRideSaved ? "Current Ride (saved)" : "Current Ride (unsaved)"
+            let label = isCurrentRideSaved ? "Current Ride (saved)" : "Current Ride (unsaved)"
+            out.append(("current", label))
         } else {
-            currentLabel = "Current Ride (none)"
+            out.append(("current", "Current Ride (none)"))
         }
-        out.append(("current", currentLabel))
-
-        let df = DateFormatter()
-        df.dateStyle = .medium
-        df.timeStyle = .short
-
         for r in rideStore.rides {
-            let label = "\(r.name) • \(String(format: "%.2f mi", r.summary.distanceMi))"
-            out.append((r.id.uuidString, label))
+            out.append((r.id.uuidString, "\(r.name) • \(String(format: "%.2f mi", r.summary.distanceMi))"))
         }
         return out
     }
@@ -72,201 +58,54 @@ struct ShareCardScreen: View {
         if selectedKey == "current" {
             guard let s = currentSummary, currentRoute.count >= 2 else { return nil }
             return (s, currentRoute)
-        } else {
-            guard let id = UUID(uuidString: selectedKey),
-                  let ride = rideStore.rides.first(where: { $0.id == id }) else { return nil }
-            return (ride.summary, ride.route)
         }
+        guard let id = UUID(uuidString: selectedKey),
+              let ride = rideStore.rides.first(where: { $0.id == id }) else { return nil }
+        return (ride.summary, ride.route)
     }
 
     private var selectedSavedRide: SavedRide? {
-        guard selectedKey != "current",
-              let id = UUID(uuidString: selectedKey) else { return nil }
+        guard selectedKey != "current", let id = UUID(uuidString: selectedKey) else { return nil }
         return rideStore.rides.first(where: { $0.id == id })
     }
-    
+
     private var selectedLabel: String {
         rideOptions.first(where: { $0.key == selectedKey })?.label ?? "Select ride"
     }
 
+    private var cardIsReady: Bool {
+        backgroundUIImage != nil && selectedSummaryAndRoute != nil
+    }
+
+    // MARK: - Body
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
+        VStack(spacing: 0) {
+            cardPreviewSection
 
-                // Dropdown to choose ride
-                Menu {
-                    ForEach(rideOptions, id: \.key) { opt in
-                        Button {
-                            selectedKey = opt.key
-                        } label: {
-                            Text(opt.label)
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(selectedLabel)
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Color.appAccent)
-                    }
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.appSurface2)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    selectRideSection
+                    backgroundPhotoSection
+                    customizeSection
                 }
-
-                // Save current ride to storage (so it appears later)
-                if selectedKey == "current", !isCurrentRideSaved {
-                    Button {
-                        pendingName = defaultRideName()
-                        pendingRideBikeID = nil
-                        pendingRidePhoto = nil
-                        showNameSheet = true
-                    } label: {
-                        Text("Save Ride to Library")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(currentSummary == nil || currentLogURL == nil || currentRoute.count < 2)
-                }
-
-                // Mode controls
-                HStack {
-                    Picker("Mode", selection: $mode) {
-                        ForEach(ShareBackgroundMode.allCases) { m in
-                            Text(m.rawValue).tag(m)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                HStack(spacing: 8) {
-                    TextField("Title (optional)", text: $title)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: .infinity)
-
-                    ColorPicker("Text", selection: $textColor, supportsOpacity: true)
-                        .labelsHidden()
-                        .frame(width: 44, height: 44, alignment: .trailing)
-                }
-
-                PhotosPicker(selection: $pickedItem, matching: .images) {
-                    Label(backgroundUIImage == nil ? "Choose Photo" : "Change Photo", systemImage: "photo")
-                }
-                .onChange(of: pickedItem) { _, newItem in
-                    Task { await loadImage(from: newItem) }
-                }
-
-                // Show the exact stats that will be on the image
-                if let (s, _) = selectedSummaryAndRoute {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Ride Stats")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color(white: 0.50))
-                        shareStatRow("Distance", shareMetricText(summary: s, field: .distance))
-                        shareStatRow("Time", shareMetricText(summary: s, field: .duration))
-                        shareStatRow("Max Speed", shareMetricText(summary: s, field: .maxSpeed))
-                        shareStatRow("Max Lean", shareMetricText(summary: s, field: .maxLean))
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
-                    .background(Color.appSurface)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                } else {
-                    Text("No ride data yet. Record a ride, then come back here.")
-                        .font(.subheadline)
-                        .foregroundStyle(Color(white: 0.45))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(14)
-                        .background(Color.appSurface)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-
-                // Preview + export
-                if let bg = backgroundUIImage, let (s, route) = selectedSummaryAndRoute {
-                    ShareCardView(
-                        background: bg,
-                        summary: s,
-                        title: title.isEmpty ? "Ride" : title,
-                        route: route,
-                        mode: mode,
-                        tightPadding: true,
-                        textColor: textColor,
-                        routeColor: textColor
-                    )
-                    .frame(width: 340, height: 605)
-                    .clipShape(RoundedRectangle(cornerRadius: 24))
-                    .shadow(radius: 12)
-                    .padding(.top, 6)
-
-                    if let url = exportedURL {
-                        ShareLink(item: url) { Text("Share") }
-                            .buttonStyle(.borderedProminent)
-                            .padding(.top, 6)
-                    }
-                }
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+                .padding(.bottom, 100)
             }
-            .padding()
         }
         .background(Color.appBg.ignoresSafeArea())
-        .sheet(isPresented: $showNameSheet) {
-            SaveRideSheet(
-                name: $pendingName,
-                selectedImage: $pendingRidePhoto,
-                selectedBikeID: $pendingRideBikeID,
-                bikes: garageStore.bikes,
-                onSave: {
-                    guard let s = currentSummary,
-                          let logURL = currentLogURL,
-                          currentRoute.count >= 2 else {
-                        showNameSheet = false
-                        return
-                    }
-
-                    let trimmed = pendingName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let finalName = trimmed.isEmpty ? defaultRideName() : trimmed
-
-                    if rideStore.hasRide(named: finalName) {
-                        reopenNameSheetAfterDuplicate = true
-                        showDuplicateAlert = true
-                        return
-                    }
-
-                    let savedRide = rideStore.saveRide(
-                        name: finalName,
-                        summary: s,
-                        route: currentRoute,
-                        logTempURL: logURL,
-                        rideBikeID: pendingRideBikeID,
-                        ridePhoto: pendingRidePhoto
-                    )
-                    guard savedRide != nil else {
-                        reopenNameSheetAfterDuplicate = true
-                        showDuplicateAlert = true
-                        return
-                    }
-                    rideStore.load()
-                    if let latest = rideStore.latest {
-                        selectedKey = latest.id.uuidString
-                    }
-                    pendingRideBikeID = nil
-                    pendingRidePhoto = nil
-                    showNameSheet = false
-                },
-                onCancel: {
-                    pendingRideBikeID = nil
-                    pendingRidePhoto = nil
-                    showNameSheet = false
-                }
-            )
-            .presentationDetents([.height(420)])
+        .navigationTitle("Share")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.appSurface, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                exportToolbarButton
+            }
         }
+        .sheet(isPresented: $showNameSheet) { saveRideSheet }
         .alert("Ride name already exists", isPresented: $showDuplicateAlert) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -277,20 +116,18 @@ struct ShareCardScreen: View {
             reopenNameSheetAfterDuplicate = false
             showNameSheet = true
         }
-        .navigationTitle("Share")
-        .navigationBarTitleDisplayMode(.inline)
         .onChange(of: initiallySelectedRideID) { _, newValue in
-            if newValue != nil {
-                applyInitialSelectionFromNavigation()
-            }
+            if newValue != nil { applyInitialSelectionFromNavigation() }
         }
-        .onChange(of: selectedKey) { _, _ in
-            Task { await applyAssociatedRidePhotoIfAvailable() }
-        }
-        .onChange(of: title) { _, _ in refreshExportedURLIfNeeded() }
-        .onChange(of: mode) { _, _ in refreshExportedURLIfNeeded() }
-        .onChange(of: textColor) { _, _ in refreshExportedURLIfNeeded() }
+        .onChange(of: selectedKey)     { _, _ in Task { await applyAssociatedRidePhotoIfAvailable() } }
+        .onChange(of: title)           { _, _ in refreshExportedURLIfNeeded() }
+        .onChange(of: mode)            { _, _ in refreshExportedURLIfNeeded() }
+        .onChange(of: textColor)       { _, _ in refreshExportedURLIfNeeded() }
+        .onChange(of: routeColor)      { _, _ in refreshExportedURLIfNeeded() }
         .onChange(of: backgroundUIImage) { _, _ in refreshExportedURLIfNeeded() }
+        .onChange(of: pickedItem) { _, newItem in
+            Task { await loadImage(from: newItem) }
+        }
         .onAppear {
             if rideStore.rides.isEmpty { rideStore.load() }
             if initiallySelectedRideID != nil {
@@ -300,6 +137,289 @@ struct ShareCardScreen: View {
             }
             Task { await applyAssociatedRidePhotoIfAvailable() }
         }
+    }
+
+    // MARK: - Card Preview
+
+    private var cardPreviewSection: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Color.appSurface
+
+                if let bg = backgroundUIImage, let (s, route) = selectedSummaryAndRoute {
+                    ShareCardView(
+                        background: bg,
+                        summary: s,
+                        title: title.isEmpty ? "Ride" : title,
+                        route: route,
+                        mode: mode,
+                        tightPadding: true,
+                        textColor: textColor,
+                        routeColor: routeColor
+                    )
+                    .frame(width: 185, height: 329)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                } else {
+                    VStack(spacing: 10) {
+                        Image(systemName: "photo.fill")
+                            .font(.system(size: 28, weight: .regular))
+                            .foregroundStyle(Color.textGhost)
+                        Text("Choose a ride and photo")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.textGhost)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 360)
+
+            Rectangle()
+                .fill(Color.appDivider)
+                .frame(height: 1)
+        }
+    }
+
+    // MARK: - Select Ride
+
+    private var selectRideSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("Select Ride")
+
+            Menu {
+                ForEach(rideOptions, id: \.key) { opt in
+                    Button { selectedKey = opt.key } label: { Text(opt.label) }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Text(selectedLabel)
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.appAccent)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 13)
+                .background(Color.appSurface2)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+
+            if selectedKey == "current", !isCurrentRideSaved {
+                Button {
+                    pendingName = defaultRideName()
+                    pendingRideBikeID = nil
+                    pendingRidePhoto = nil
+                    showNameSheet = true
+                } label: {
+                    Text("Save Ride to Library")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.appAccent)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Color.appAccent.opacity(0.10))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .disabled(currentSummary == nil || currentLogURL == nil || currentRoute.count < 2)
+            }
+        }
+    }
+
+    // MARK: - Background Photo
+
+    private var backgroundPhotoSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("Background Photo")
+
+            PhotosPicker(selection: $pickedItem, matching: .images) {
+                HStack(spacing: 12) {
+                    Image(systemName: "photo")
+                        .font(.system(size: 17))
+                        .foregroundStyle(Color.appAccent)
+                    Text(backgroundUIImage == nil ? "Choose Photo" : "Change Photo")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.textPrimary)
+                    Spacer()
+                    if backgroundUIImage != nil {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 17))
+                            .foregroundStyle(Color.appAccent)
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.textGhost)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 13)
+                .background(Color.appSurface2)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+        }
+    }
+
+    // MARK: - Customize
+
+    private var customizeSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("Customize")
+
+            VStack(spacing: 0) {
+                // Title
+                HStack(spacing: 12) {
+                    Text("Title")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.textSecondary)
+                    TextField("Ride", text: $title)
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.textPrimary)
+                        .multilineTextAlignment(.trailing)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 13)
+
+                rowDivider
+
+                // Text color
+                HStack {
+                    Text("Text color")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.textSecondary)
+                    Spacer()
+                    ColorPicker("", selection: $textColor, supportsOpacity: true)
+                        .labelsHidden()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 13)
+
+                rowDivider
+
+                // Route color
+                HStack {
+                    Text("Route color")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.textSecondary)
+                    Spacer()
+                    ColorPicker("", selection: $routeColor, supportsOpacity: true)
+                        .labelsHidden()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 13)
+
+                rowDivider
+
+                // Photo fit
+                HStack {
+                    Text("Photo fit")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.textSecondary)
+                    Spacer()
+                    Picker("", selection: $mode) {
+                        ForEach(ShareBackgroundMode.allCases) { m in
+                            Text(m.rawValue).tag(m)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 130)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+            }
+            .background(Color.appSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+
+    // MARK: - Export Toolbar Button
+
+    @ViewBuilder
+    private var exportToolbarButton: some View {
+        if let url = exportedURL {
+            ShareLink(item: url) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+            }
+        } else if backgroundUIImage != nil && selectedSummaryAndRoute != nil {
+            ProgressView()
+                .tint(Color.appAccent)
+                .scaleEffect(0.85)
+        } else {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.textGhost)
+        }
+    }
+
+    // MARK: - Save Ride Sheet
+
+    private var saveRideSheet: some View {
+        SaveRideSheet(
+            name: $pendingName,
+            selectedImage: $pendingRidePhoto,
+            selectedBikeID: $pendingRideBikeID,
+            bikes: garageStore.bikes,
+            onSave: {
+                guard let s = currentSummary,
+                      let logURL = currentLogURL,
+                      currentRoute.count >= 2 else {
+                    showNameSheet = false
+                    return
+                }
+                let trimmed = pendingName.trimmingCharacters(in: .whitespacesAndNewlines)
+                let finalName = trimmed.isEmpty ? defaultRideName() : trimmed
+
+                if rideStore.hasRide(named: finalName) {
+                    reopenNameSheetAfterDuplicate = true
+                    showDuplicateAlert = true
+                    return
+                }
+
+                let savedRide = rideStore.saveRide(
+                    name: finalName,
+                    summary: s,
+                    route: currentRoute,
+                    logTempURL: logURL,
+                    rideBikeID: pendingRideBikeID,
+                    ridePhoto: pendingRidePhoto
+                )
+                guard savedRide != nil else {
+                    reopenNameSheetAfterDuplicate = true
+                    showDuplicateAlert = true
+                    return
+                }
+                rideStore.load()
+                if let latest = rideStore.latest {
+                    selectedKey = latest.id.uuidString
+                }
+                pendingRideBikeID = nil
+                pendingRidePhoto = nil
+                showNameSheet = false
+            },
+            onCancel: {
+                pendingRideBikeID = nil
+                pendingRidePhoto = nil
+                showNameSheet = false
+            }
+        )
+        .presentationDetents([.height(420)])
+        .presentationBackground(Color.appSurface)
+    }
+
+    // MARK: - Helpers
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 11, weight: .semibold))
+            .kerning(0.8)
+            .foregroundStyle(Color.textGhost)
+    }
+
+    private var rowDivider: some View {
+        Rectangle()
+            .fill(Color.appDivider)
+            .frame(height: 1)
+            .padding(.leading, 14)
     }
 
     private func applyInitialSelectionFromNavigation() {
@@ -313,7 +433,6 @@ struct ShareCardScreen: View {
     }
 
     private func setDefaultSelection() {
-        // Default selection: current if available, else latest saved
         if !hasCurrentRide, let latest = rideStore.latest {
             selectedKey = latest.id.uuidString
         } else {
@@ -324,7 +443,6 @@ struct ShareCardScreen: View {
     private func loadImage(from item: PhotosPickerItem?) async {
         guard let item else { return }
         exportedURL = nil
-
         if let data = try? await item.loadTransferable(type: Data.self),
            let ui = UIImage(data: data) {
             backgroundUIImage = normalizedImage(ui)
@@ -333,8 +451,7 @@ struct ShareCardScreen: View {
     }
 
     private func defaultRideName() -> String {
-        let now = Date()
-        return "Ride \(DateFormatter.localizedString(from: now, dateStyle: .medium, timeStyle: .short))"
+        "Ride \(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short))"
     }
 
     private func exportPNG(background: UIImage,
@@ -342,10 +459,9 @@ struct ShareCardScreen: View {
                            title: String,
                            route: [RidePoint],
                            mode: ShareBackgroundMode,
-                           textColor: Color) -> URL? {
-
+                           textColor: Color,
+                           routeColor: Color) -> URL? {
         let size = CGSize(width: 1080, height: 1920)
-
         let view = ShareCardView(
             background: background,
             summary: summary,
@@ -354,7 +470,7 @@ struct ShareCardScreen: View {
             mode: mode,
             tightPadding: true,
             textColor: textColor,
-            routeColor: textColor
+            routeColor: routeColor
         )
         .frame(width: size.width, height: size.height)
 
@@ -366,12 +482,10 @@ struct ShareCardScreen: View {
 
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("share-\(Int(Date().timeIntervalSince1970)).png")
-
         do {
             try data.write(to: url, options: [.atomic])
             return url
         } catch {
-            print("Export failed:", error)
             return nil
         }
     }
@@ -383,9 +497,10 @@ struct ShareCardScreen: View {
             exportedURL = nil
             return
         }
-        let (t, m, c) = (title.isEmpty ? "Ride" : title, mode, textColor)
+        let (t, m, tc, rc) = (title.isEmpty ? "Ride" : title, mode, textColor, routeColor)
         exportTask = Task {
-            let url = exportPNG(background: bg, summary: s, title: t, route: route, mode: m, textColor: c)
+            let url = exportPNG(background: bg, summary: s, title: t, route: route,
+                                mode: m, textColor: tc, routeColor: rc)
             if !Task.isCancelled { exportedURL = url }
         }
     }
@@ -394,10 +509,7 @@ struct ShareCardScreen: View {
         guard selectedKey != "current",
               let id = UUID(uuidString: selectedKey),
               let ride = rideStore.rides.first(where: { $0.id == id }),
-              let url = rideStore.photoURL(for: ride) else {
-            if selectedKey == "current" { /* keep existing background */ }
-            return
-        }
+              let url = rideStore.photoURL(for: ride) else { return }
 
         let image = await Task.detached(priority: .userInitiated) { () -> UIImage? in
             guard let data = try? Data(contentsOf: url) else { return nil }
@@ -424,37 +536,5 @@ struct ShareCardScreen: View {
         let normalized = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
         return normalized ?? image
-    }
-
-    private func shareStatRow(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.subheadline)
-                .foregroundStyle(Color(white: 0.50))
-            Spacer()
-            Text(value)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
-        }
-    }
-
-    private func shareMetricText(summary: RideSummary, field: ShareMetricField) -> String {
-        let availability = selectedSavedRide?.metricAvailability ?? .allAvailable
-        switch field {
-        case .duration:
-            return availability.hasDuration ? summary.durationText : "N/A"
-        case .maxSpeed:
-            return availability.hasMaxSpeed ? String(format: "%.1f mph", summary.maxSpeedMph) : "N/A"
-        case .averageSpeed:
-            if availability.hasAverageSpeed, summary.durationSec > 0 {
-                let avgMps = summary.distanceM / summary.durationSec
-                return String(format: "%.1f mph", avgMps * 2.23693629)
-            }
-            return "N/A"
-        case .maxLean:
-            return availability.hasMaxLean ? String(format: "%.0f°", summary.maxAbsLeanDeg) : "N/A"
-        case .distance:
-            return availability.hasDistance ? String(format: "%.2f mi", summary.distanceMi) : "N/A"
-        }
     }
 }

@@ -1,13 +1,27 @@
 import SwiftUI
 
-// MARK: - App Theme Colors
+// MARK: - Color Tokens
 
 extension Color {
+    // Surfaces
     static let appBg       = Color(red: 0.094, green: 0.094, blue: 0.094)   // #181818
     static let appSurface  = Color(red: 0.141, green: 0.141, blue: 0.141)   // #242424
     static let appSurface2 = Color(red: 0.184, green: 0.184, blue: 0.184)   // #2F2F2F
     static let appAccent   = Color(red: 1.000, green: 0.427, blue: 0.000)   // #FF6D00
     static let appDivider  = Color(red: 0.220, green: 0.220, blue: 0.220)   // #383838
+
+    // Text hierarchy
+    static let textPrimary   = Color(red: 0.941, green: 0.941, blue: 0.933) // #F0F0EE
+    static let textSecondary = Color(white: 0.549)                           // #8C8C8C
+    static let textTertiary  = Color(white: 0.451)                           // #737373
+    static let textGhost     = Color(white: 0.349)                           // #595959
+}
+
+// MARK: - Font Scale
+
+extension Font {
+    static let statDisplay:   Font = .system(size: 76, weight: .bold).monospacedDigit()
+    static let statSecondary: Font = .system(size: 38, weight: .bold).monospacedDigit()
 }
 
 // MARK: - PrimaryButton
@@ -71,11 +85,11 @@ struct EmptyStateView: View {
 
             Text(title)
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.textPrimary)
 
             Text(message)
                 .font(.subheadline)
-                .foregroundStyle(Color(white: 0.55))
+                .foregroundStyle(Color.textSecondary)
                 .multilineTextAlignment(.center)
         }
         .padding(32)
@@ -95,7 +109,7 @@ struct LoadingView: View {
                 .scaleEffect(1.4)
             Text(message)
                 .font(.subheadline)
-                .foregroundStyle(Color(white: 0.55))
+                .foregroundStyle(Color.textSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.appBg.ignoresSafeArea())

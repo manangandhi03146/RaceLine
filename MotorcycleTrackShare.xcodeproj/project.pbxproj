@@ -34,6 +34,7 @@
 		4FE936532FC586920027978B /* CloudGarageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE9364C2FC586920027978B /* CloudGarageStore.swift */; };
 		4FE936542FC586920027978B /* CloudStorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE9364E2FC586920027978B /* CloudStorageService.swift */; };
 		4FE936552FC586920027978B /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 4FE936562FC586920027978B /* Supabase */; };
+		4FAB00012FAB00010012ABCD /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FAB00002FAB00010012ABCD /* ProfileView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -83,6 +84,7 @@
 		4FE9364D2FC586920027978B /* CloudRideStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudRideStore.swift; sourceTree = "<group>"; };
 		4FE9364E2FC586920027978B /* CloudStorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudStorageService.swift; sourceTree = "<group>"; };
 		4FE9364F2FC586920027978B /* SupabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseManager.swift; sourceTree = "<group>"; };
+		4FAB00002FAB00010012ABCD /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -208,6 +210,7 @@
 				4F59D4C02F16061A0093403B /* ShareCardScreen.swift */,
 				4F59D4BE2F1605D80093403B /* ShareCardView.swift */,
 				4F50095C2F15E0BB005C33B3 /* ContentView.swift */,
+				4FAB00002FAB00010012ABCD /* ProfileView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -386,6 +389,7 @@
 				4F9A12092F22B2E80068109E /* RideStore.swift in Sources */,
 				4F59D4C32F18467B0093403B /* RidePoint.swift in Sources */,
 				4F59D4BF2F1605DF0093403B /* ShareCardView.swift in Sources */,
+				4FAB00012FAB00010012ABCD /* ProfileView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
