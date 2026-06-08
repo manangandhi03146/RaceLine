@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 
 @MainActor
 final class RideRecorder: ObservableObject {
@@ -14,6 +15,17 @@ final class RideRecorder: ObservableObject {
     private var startTime: Date?
     private var distanceM: Double = 0
     private var lastCoord: (lat: Double, lon: Double)?
+
+    // Altitude tracking
+    private var altitudes: [Double] = []
+    private var elevationGainM: Double = 0
+    private var lastAltitude: Double?
+
+    // Hard braking / aggressive acceleration detection
+    private var hardBrakingCount: Int = 0
+    private var aggressiveAccelCount: Int = 0
+    private var lastSpeedMps: Double?
+    private var lastSampleTime: TimeInterval?
 
     // Keep references so the Task only captures `self`
     private weak var motionService: MotionService?
@@ -32,6 +44,13 @@ final class RideRecorder: ObservableObject {
         startTime = Date()
         distanceM = 0
         lastCoord = nil
+        altitudes.removeAll()
+        elevationGainM = 0
+        lastAltitude = nil
+        hardBrakingCount = 0
+        aggressiveAccelCount = 0
+        lastSpeedMps = nil
+        lastSampleTime = nil
 
         motionService = motion
         locationService = location
@@ -44,9 +63,7 @@ final class RideRecorder: ObservableObject {
         recordingTask = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
-                await MainActor.run {
-                    self.captureSample()
-                }
+                await MainActor.run { self.captureSample() }
                 try? await Task.sleep(nanoseconds: intervalNs)
             }
         }
@@ -62,30 +79,38 @@ final class RideRecorder: ObservableObject {
         let end = Date()
         let start = startTime ?? end
 
-        let leanValues = samples.compactMap { $0.leanDeg }
-        let maxSpeed = samples.compactMap { $0.speedMps }.max() ?? 0
-        let maxLean  = leanValues.map { abs($0) }.max() ?? 0
-        let maxRight = leanValues.filter { $0 > 0 }.max() ?? 0
-        let maxLeft  = leanValues.filter { $0 < 0 }.map { abs($0) }.max() ?? 0
+        let leanValues  = samples.compactMap { $0.leanDeg }
+        let maxSpeed    = samples.compactMap { $0.speedMps }.max() ?? 0
+        let maxLean     = leanValues.map { abs($0) }.max() ?? 0
+        let maxRight    = leanValues.filter { $0 > 0 }.max() ?? 0
+        let maxLeft     = leanValues.filter { $0 < 0 }.map { abs($0) }.max() ?? 0
+
+        let duration    = end.timeIntervalSince(start)
+        let avgSpeedMps = duration > 0 ? distanceM / duration : 0
 
         summary = RideSummary(
-            startTime: start,
-            endTime: end,
-            durationSec: end.timeIntervalSince(start),
-            distanceM: distanceM,
-            maxSpeedMps: maxSpeed,
-            maxAbsLeanDeg: maxLean,
-            maxLeanRightDeg: maxRight,
-            maxLeanLeftDeg: maxLeft
+            startTime:            start,
+            endTime:              end,
+            durationSec:          duration,
+            distanceM:            distanceM,
+            maxSpeedMps:          maxSpeed,
+            maxAbsLeanDeg:        maxLean,
+            maxLeanRightDeg:      maxRight,
+            maxLeanLeftDeg:       maxLeft,
+            avgSpeedMps:          avgSpeedMps,
+            elevationGainM:       elevationGainM > 0 ? elevationGainM : nil,
+            minAltitudeM:         altitudes.min(),
+            maxAltitudeM:         altitudes.max(),
+            hardBrakingCount:     hardBrakingCount > 0 ? hardBrakingCount : nil,
+            aggressiveAccelCount: aggressiveAccelCount > 0 ? aggressiveAccelCount : nil
         )
 
         do {
             fileURL = try writeJSONLines(samples: samples)
         } catch {
-            print("Failed to write ride file:", error)
+            print("RideRecorder: Failed to write ride file:", error)
         }
 
-        // Optional cleanup
         motionService = nil
         locationService = nil
     }
@@ -95,42 +120,67 @@ final class RideRecorder: ObservableObject {
     private func captureSample() {
         guard let motion = motionService, let location = locationService else { return }
 
-        // Distance + route update (only when we have GPS coords)
+        let now = Date().timeIntervalSince1970
+
+        // GPS + distance + route
         if let lat = location.lat, let lon = location.lon {
             if let last = lastCoord {
                 let segment = haversineMeters(lat1: last.lat, lon1: last.lon, lat2: lat, lon2: lon)
-
-                // Sanity filter to ignore huge GPS jumps between samples
                 if segment.isFinite && segment >= 0 && segment < 250 {
                     distanceM += segment
-
-                    // Only add a point if we moved ~3m to reduce noise/file size
                     if segment > 3 {
                         route.append(RidePoint(lat: lat, lon: lon))
                     }
                 }
             } else {
-                // First coordinate
                 route.append(RidePoint(lat: lat, lon: lon))
             }
-
             lastCoord = (lat, lon)
         }
 
-        let absLean = abs(motion.leanDeg)
-        if absLean > liveMaxAbsLeanDeg {
-            liveMaxAbsLeanDeg = absLean
+        // Altitude / elevation gain
+        if let alt = location.altitudeM {
+            altitudes.append(alt)
+            if let prev = lastAltitude {
+                let delta = alt - prev
+                if delta > 0 {
+                    elevationGainM += delta
+                }
+            }
+            lastAltitude = alt
         }
 
+        // Hard braking / aggressive acceleration detection
+        if let currentSpeed = location.speedMps, let prevSpeed = lastSpeedMps,
+           let prevTime = lastSampleTime {
+            let dt = now - prevTime
+            if dt > 0 {
+                let accel = (currentSpeed - prevSpeed) / dt
+                if accel < -4.0 { hardBrakingCount += 1 }       // > 0.4g braking
+                if accel > 3.0  { aggressiveAccelCount += 1 }   // > 0.3g acceleration
+            }
+        }
+
+        if let spd = location.speedMps { lastSpeedMps = spd }
+        lastSampleTime = now
+
+        // Max lean
+        let absLean = abs(motion.leanDeg)
+        if absLean > liveMaxAbsLeanDeg { liveMaxAbsLeanDeg = absLean }
+
         let s = RideSample(
-            t: Date().timeIntervalSince1970,
-            lat: location.lat,
-            lon: location.lon,
+            t:        now,
+            lat:      location.lat,
+            lon:      location.lon,
             speedMps: location.speedMps,
-            leanDeg: motion.leanDeg,
-            rollRad: motion.rollRad,
+            altitudeM: location.altitudeM,
+            leanDeg:  motion.leanDeg,
+            rollRad:  motion.rollRad,
             pitchRad: motion.pitchRad,
-            yawRad: motion.yawRad
+            yawRad:   motion.yawRad,
+            accelX:   motion.accelX,
+            accelY:   motion.accelY,
+            accelZ:   motion.accelZ
         )
 
         samples.append(s)
@@ -140,19 +190,15 @@ final class RideRecorder: ObservableObject {
 
     private func writeJSONLines(samples: [RideSample]) throws -> URL {
         let encoder = JSONEncoder()
-
         var out = ""
-        out.reserveCapacity(samples.count * 120)
-
+        out.reserveCapacity(samples.count * 150)
         for s in samples {
             let data = try encoder.encode(s)
             out += String(decoding: data, as: UTF8.self)
             out += "\n"
         }
-
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("ride-\(Int(Date().timeIntervalSince1970)).jsonl")
-
         try out.data(using: .utf8)!.write(to: url, options: [.atomic])
         return url
     }
@@ -163,12 +209,9 @@ final class RideRecorder: ObservableObject {
         let r = 6_371_000.0
         let dLat = (lat2 - lat1) * .pi / 180.0
         let dLon = (lon2 - lon1) * .pi / 180.0
-
         let a = sin(dLat / 2) * sin(dLat / 2)
               + cos(lat1 * .pi / 180.0) * cos(lat2 * .pi / 180.0)
               * sin(dLon / 2) * sin(dLon / 2)
-
         return 2.0 * r * atan2(sqrt(a), sqrt(1.0 - a))
     }
 }
-

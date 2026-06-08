@@ -35,6 +35,10 @@
 		4FE936542FC586920027978B /* CloudStorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE9364E2FC586920027978B /* CloudStorageService.swift */; };
 		4FE936552FC586920027978B /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 4FE936562FC586920027978B /* Supabase */; };
 		4FAB00012FAB00010012ABCD /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FAB00002FAB00010012ABCD /* ProfileView.swift */; };
+		AA000001000000010000AAA1 /* MaintenanceRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAA0 /* MaintenanceRecord.swift */; };
+		AA000001000000010000AAA3 /* MaintenanceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAA2 /* MaintenanceStore.swift */; };
+		AA000001000000010000AAA5 /* SyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAA4 /* SyncService.swift */; };
+		AA000001000000010000AAA7 /* MaintenanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAA6 /* MaintenanceView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -85,6 +89,10 @@
 		4FE9364E2FC586920027978B /* CloudStorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudStorageService.swift; sourceTree = "<group>"; };
 		4FE9364F2FC586920027978B /* SupabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseManager.swift; sourceTree = "<group>"; };
 		4FAB00002FAB00010012ABCD /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		AA000001000000010000AAA0 /* MaintenanceRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceRecord.swift; sourceTree = "<group>"; };
+		AA000001000000010000AAA2 /* MaintenanceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceStore.swift; sourceTree = "<group>"; };
+		AA000001000000010000AAA4 /* SyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncService.swift; sourceTree = "<group>"; };
+		AA000001000000010000AAA6 /* MaintenanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -175,6 +183,7 @@
 				4F59D4C22F1846770093403B /* RidePoint.swift */,
 				4F50095E2F15F09D005C33B3 /* RideSummary.swift */,
 				4F50095D2F15F08A005C33B3 /* RideSample.swift */,
+				AA000001000000010000AAA0 /* MaintenanceRecord.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -194,6 +203,8 @@
 				4F50095B2F132CF1005C33B3 /* RideRecorder.swift */,
 				4F50095A2F132C91005C33B3 /* MotionService.swift */,
 				4F5009592F132C79005C33B3 /* LocationService.swift */,
+				AA000001000000010000AAA2 /* MaintenanceStore.swift */,
+				AA000001000000010000AAA4 /* SyncService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -211,6 +222,7 @@
 				4F59D4BE2F1605D80093403B /* ShareCardView.swift */,
 				4F50095C2F15E0BB005C33B3 /* ContentView.swift */,
 				4FAB00002FAB00010012ABCD /* ProfileView.swift */,
+				AA000001000000010000AAA6 /* MaintenanceView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -390,6 +402,10 @@
 				4F59D4C32F18467B0093403B /* RidePoint.swift in Sources */,
 				4F59D4BF2F1605DF0093403B /* ShareCardView.swift in Sources */,
 				4FAB00012FAB00010012ABCD /* ProfileView.swift in Sources */,
+				AA000001000000010000AAA1 /* MaintenanceRecord.swift in Sources */,
+				AA000001000000010000AAA3 /* MaintenanceStore.swift in Sources */,
+				AA000001000000010000AAA5 /* SyncService.swift in Sources */,
+				AA000001000000010000AAA7 /* MaintenanceView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

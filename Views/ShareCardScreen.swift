@@ -29,6 +29,11 @@ struct ShareCardScreen: View {
     @State private var pendingName: String = ""
     @State private var pendingRidePhoto: UIImage?
     @State private var pendingRideBikeID: UUID?
+    @State private var pendingRideType: RideType = .street
+    @State private var pendingNotes: String = ""
+    @State private var pendingTags: [String] = []
+    @AppStorage("defaultStorageMode") private var defaultStorageModeRaw: String = StorageMode.localOnly.rawValue
+    @State private var pendingStorageMode: StorageMode = .localOnly
     @State private var selectedKey: String = "current"
 
     private var hasCurrentRide: Bool {
@@ -358,6 +363,10 @@ struct ShareCardScreen: View {
             name: $pendingName,
             selectedImage: $pendingRidePhoto,
             selectedBikeID: $pendingRideBikeID,
+            selectedRideType: $pendingRideType,
+            selectedStorageMode: $pendingStorageMode,
+            notes: $pendingNotes,
+            tags: $pendingTags,
             bikes: garageStore.bikes,
             onSave: {
                 guard let s = currentSummary,
@@ -381,7 +390,11 @@ struct ShareCardScreen: View {
                     route: currentRoute,
                     logTempURL: logURL,
                     rideBikeID: pendingRideBikeID,
-                    ridePhoto: pendingRidePhoto
+                    ridePhoto: pendingRidePhoto,
+                    rideType: pendingRideType,
+                    notes: pendingNotes.isEmpty ? nil : pendingNotes,
+                    tags: pendingTags,
+                    storageMode: pendingStorageMode
                 )
                 guard savedRide != nil else {
                     reopenNameSheetAfterDuplicate = true
@@ -394,15 +407,23 @@ struct ShareCardScreen: View {
                 }
                 pendingRideBikeID = nil
                 pendingRidePhoto = nil
+                pendingRideType = .street
+                pendingNotes = ""
+                pendingTags = []
+                pendingStorageMode = StorageMode(rawValue: defaultStorageModeRaw) ?? .localOnly
                 showNameSheet = false
             },
             onCancel: {
                 pendingRideBikeID = nil
                 pendingRidePhoto = nil
+                pendingRideType = .street
+                pendingNotes = ""
+                pendingTags = []
+                pendingStorageMode = StorageMode(rawValue: defaultStorageModeRaw) ?? .localOnly
                 showNameSheet = false
             }
         )
-        .presentationDetents([.height(420)])
+        .presentationDetents([.height(520)])
         .presentationBackground(Color.appSurface)
     }
 

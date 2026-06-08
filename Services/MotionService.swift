@@ -7,6 +7,9 @@ final class MotionService: ObservableObject {
     @Published var rollRad: Double = 0
     @Published var pitchRad: Double = 0
     @Published var yawRad: Double = 0
+    @Published var accelX: Double = 0   // lateral
+    @Published var accelY: Double = 0   // longitudinal (forward/back)
+    @Published var accelZ: Double = 0   // vertical
 
     private let manager = CMMotionManager()
     private let queue = OperationQueue()
@@ -14,7 +17,7 @@ final class MotionService: ObservableObject {
     private var isRunning = false
     private var leanOffsetRad: Double = 0
 
-    var leanSign: Double = 1 // set to -1 if left/right lean is flipped
+    var leanSign: Double = 1
 
     func start(hz: Double = 50) {
         guard !isRunning else { return }
@@ -26,18 +29,17 @@ final class MotionService: ObservableObject {
         manager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: queue) { [weak self] motion, _ in
             guard let self, let m = motion else { return }
             let a = m.attitude
-
-            let roll = a.roll
-            let pitch = a.pitch
-            let yaw = a.yaw
+            let ua = m.userAcceleration
 
             Task { @MainActor in
-                self.rollRad = roll
-                self.pitchRad = pitch
-                self.yawRad = yaw
+                self.rollRad  = a.roll
+                self.pitchRad = a.pitch
+                self.yawRad   = a.yaw
+                self.accelX   = ua.x
+                self.accelY   = ua.y
+                self.accelZ   = ua.z
 
-                // Stem mount portrait -> lean usually maps to roll
-                let rawLean = roll
+                let rawLean = a.roll
                 self.leanDeg = ((rawLean - self.leanOffsetRad) * self.leanSign) * 180.0 / .pi
             }
         }
@@ -50,9 +52,7 @@ final class MotionService: ObservableObject {
     }
 
     func calibrateUpright() {
-        // Make current lean read as 0° immediately
         leanOffsetRad = rollRad
         leanDeg = 0
     }
 }
-

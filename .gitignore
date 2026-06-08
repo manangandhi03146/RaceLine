@@ -1,0 +1,96 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+xcuserdata/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+build/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# CocoaPods (not used, but just in case)
+Pods/
+*.xcworkspace
+
+# Environment / secrets
+.env
+.env.local
+.env.production
+.env.development
+*.pem
+*.key
+*.cert
+secrets/
+
+# Next.js / Node
+web/node_modules/
+web/.next/
+web/out/
+web/.env
+web/.env.local
+web/.env.production
+web/.env.development
+web/.env*.local
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+web/.pnp
+web/.pnp.js
+
+# Vercel
+.vercel
+
+# Python (gpx-ride-analyzer)
+gpx-ride-analyzer/__pycache__/
+gpx-ride-analyzer/*.pyc
+gpx-ride-analyzer/.venv/
+gpx-ride-analyzer/venv/
+
+# Claude / agent tooling
+.agents/
+.impeccable/
+skills-lock.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local Claude/tooling
+.claude/
+
+# Environment files
+.env
+.env.local
+.env.production
+web/.env.local
+web/.env.production
+
+# macOS
+.DS_Store
+
+# Supabase local CLI cache
+supabase/.temp/

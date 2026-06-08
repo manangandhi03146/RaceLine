@@ -1,0 +1,135 @@
+# Tread — Supabase Setup
+
+This directory contains all database migrations, RLS policies, storage policies, and Edge Functions for the Tread backend.
+
+---
+
+## Setup Order
+
+Run in this exact order:
+
+1. `migrations/001_schema.sql` — Creates all tables and triggers
+2. `migrations/002_rls_policies.sql` — Enables RLS and creates access policies
+3. `migrations/003_storage_policies.sql` — Creates storage bucket policies
+
+Then:
+4. Create storage buckets manually (see below)
+5. Deploy Edge Functions (see below)
+6. Configure Auth redirect URLs (see below)
+
+---
+
+## Storage Buckets
+
+Create these **private** buckets in Supabase Dashboard → Storage:
+
+| Bucket | Purpose |
+|---|---|
+| `ride-photos` | Ride cover photos |
+| `bike-photos` | Bike profile photos |
+| `ride-telemetry` | Raw JSONL telemetry files |
+| `maintenance-photos` | Maintenance receipt photos |
+
+**All buckets must be private (not public).** The storage policies in `003_storage_policies.sql` enforce per-user access.
+
+Storage path convention:
+```
+{user_id}/rides/{ride_id}/photo.jpg
+{user_id}/rides/{ride_id}/telemetry.jsonl
+{user_id}/bikes/{bike_id}/photo.jpg
+{user_id}/maintenance/{record_id}/receipt.jpg
+```
+
+---
+
+## Edge Functions
+
+### delete-account
+
+Deletes all user data including database rows and storage objects, then deletes the auth user.
+
+**Deploy:**
+```bash
+supabase functions deploy delete-account
+```
+
+**Required environment variables** (set in Supabase Dashboard → Edge Functions → Secrets):
+```
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+```
+
+> The service role key is a privileged key that bypasses RLS. It must NEVER be exposed to iOS or web clients. Only use it in Edge Functions.
+
+---
+
+## Auth Configuration
+
+In Supabase Dashboard → Authentication → URL Configuration:
+
+**Site URL:**
+```
+https://YOUR_DOMAIN.com
+```
+
+**Redirect URLs (add all):**
+```
+https://YOUR_DOMAIN.com/auth/callback
+http://localhost:3000/auth/callback
+tread://auth/callback
+```
+
+- `http://localhost:3000/auth/callback` — for local web development only
+- `https://YOUR_DOMAIN.com/auth/callback` — for production web
+- `tread://auth/callback` — for iOS deep link (password reset, email confirmation)
+
+**Before going to production:** Remove the `localhost` redirect URL and replace `YOUR_DOMAIN.com` with your actual domain.
+
+---
+
+## Schema Overview
+
+### profiles
+User settings and preferences. Auto-created on signup via trigger.
+
+Key fields: `preferred_units`, `default_storage_mode`, `hide_route_by_default`, `route_hide_distance_miles`, `cloud_sync_paused`, `sampling_rate_hz`
+
+### bikes
+User's motorcycles. `local_id` links to the iOS-side UUID for deduplication.
+
+Key fields: `nickname`, `make`, `model`, `year`, `is_default`, `is_archived`, `photo_path`
+
+### rides
+Ride summaries + metadata. Raw telemetry is stored as a file in `ride-telemetry` storage, not as rows.
+
+Key fields: `ride_type` (street/track), `storage_mode`, `has_full_telemetry`, `tags[]`, `visibility` (private by default)
+
+### maintenance_records
+Maintenance history per bike.
+
+Key fields: `type`, `title`, `date`, `reminder_interval_days`, `reminder_interval_miles`
+
+### deletion_requests
+Tracks account deletion requests for audit/fallback if Edge Function fails.
+
+---
+
+## RLS Summary
+
+All tables use `user_id = auth.uid()` for access control. Users can only see and modify their own data. The `visibility` field on rides is reserved for future public sharing but is private by default and has no SELECT policy for anonymous users yet.
+
+---
+
+## Development Tips
+
+Use the Supabase CLI for local development:
+
+```bash
+# Start local Supabase
+supabase start
+
+# Run migrations
+supabase db reset
+
+# Deploy functions
+supabase functions serve
+```

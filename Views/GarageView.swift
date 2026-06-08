@@ -1,10 +1,19 @@
 import SwiftUI
 import UIKit
 
+struct BikeStats {
+    let rideCount: Int
+    let totalMiles: Double
+    let maxSpeedMph: Double
+    let maxLeanDeg: Double
+    let lastRideDate: Date?
+}
+
 struct GarageView: View {
     @ObservedObject var garageStore: GarageStore
     @ObservedObject var catalogService: MotorcycleCatalogService
     @EnvironmentObject private var authService: AuthService
+    @EnvironmentObject private var rideStore: RideStore
     @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled: Bool = false
 
     @State private var showAddBikeSheet = false
@@ -113,6 +122,7 @@ struct GarageView: View {
                let bike = garageStore.bikes.first(where: { $0.id == bikeID }) {
                 GarageBikeDetailScreen(
                     bike: bike,
+                    stats: bikeStats(for: bikeID),
                     initialPhoto: bikeImage(for: bike),
                     catalogService: catalogService,
                     onClose: { expandedBikeID = nil },
@@ -192,9 +202,20 @@ struct GarageView: View {
                         .foregroundStyle(Color.appAccent.opacity(0.85))
                 }
 
-                Text("Added \(formattedDate(bike.createdAt))")
+                let stats = bikeStats(for: bike.id)
+                if stats.rideCount > 0 {
+                    HStack(spacing: 10) {
+                        Label("\(stats.rideCount)", systemImage: "flag.checkered")
+                        Text("·")
+                        Text(String(format: "%.0f mi", stats.totalMiles))
+                    }
                     .font(.caption)
-                    .foregroundStyle(Color.textTertiary)
+                    .foregroundStyle(Color.textSecondary)
+                } else {
+                    Text("Added \(formattedDate(bike.createdAt))")
+                        .font(.caption)
+                        .foregroundStyle(Color.textTertiary)
+                }
             }
 
             Spacer(minLength: 0)
@@ -207,6 +228,17 @@ struct GarageView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    func bikeStats(for bikeID: UUID) -> BikeStats {
+        let rides = rideStore.rides.filter { $0.bikeID == bikeID }
+        return BikeStats(
+            rideCount: rides.count,
+            totalMiles: rides.reduce(0) { $0 + $1.summary.distanceMi },
+            maxSpeedMph: rides.map { $0.summary.maxSpeedMph }.max() ?? 0,
+            maxLeanDeg: rides.map { max($0.summary.maxLeanRightDeg, $0.summary.maxLeanLeftDeg) }.max() ?? 0,
+            lastRideDate: rides.map(\.createdAt).max()
+        )
     }
 
     @ViewBuilder
@@ -471,6 +503,7 @@ private struct GarageBikeDetailScreen: View {
     }
 
     let bike: GarageBike
+    let stats: BikeStats
     let initialPhoto: UIImage?
     @ObservedObject var catalogService: MotorcycleCatalogService
     let onClose: () -> Void
@@ -495,6 +528,7 @@ private struct GarageBikeDetailScreen: View {
     @State private var showModelSearch = false
 
     init(bike: GarageBike,
+         stats: BikeStats,
          initialPhoto: UIImage?,
          catalogService: MotorcycleCatalogService,
          onClose: @escaping () -> Void,
@@ -502,6 +536,7 @@ private struct GarageBikeDetailScreen: View {
          onSetPhoto: @escaping (UIImage) -> GarageStore.SetBikePhotoResult,
          onDelete: @escaping () -> GarageStore.DeleteBikeResult) {
         self.bike = bike
+        self.stats = stats
         self.initialPhoto = initialPhoto
         self.catalogService = catalogService
         self.onClose = onClose
@@ -639,6 +674,23 @@ private struct GarageBikeDetailScreen: View {
                             .font(.caption)
                             .foregroundStyle(Color(white: 0.45))
 
+                        // Per-bike stats
+                        if stats.rideCount > 0 {
+                            HStack(spacing: 0) {
+                                bikeStatCell(value: "\(stats.rideCount)", label: "RIDES")
+                                Divider().frame(height: 32)
+                                bikeStatCell(value: String(format: "%.0f", stats.totalMiles), label: "MILES")
+                                Divider().frame(height: 32)
+                                bikeStatCell(value: String(format: "%.0f", stats.maxSpeedMph), label: "TOP MPH")
+                                Divider().frame(height: 32)
+                                bikeStatCell(value: String(format: "%.0f°", stats.maxLeanDeg), label: "MAX LEAN")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color.appSurface2)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+
                         Spacer(minLength: 0)
 
                         Button("Delete Bike") {
@@ -749,6 +801,19 @@ private struct GarageBikeDetailScreen: View {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         return formatter.string(from: date)
+    }
+
+    private func bikeStatCell(value: String, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: 16, weight: .bold).monospacedDigit())
+                .foregroundStyle(Color.appAccent)
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .kerning(0.8)
+                .foregroundStyle(Color.textGhost)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

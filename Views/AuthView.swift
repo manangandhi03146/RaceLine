@@ -10,6 +10,7 @@ struct AuthView: View {
     @State private var isBusy = false
     @State private var errorMessage: String?
     @State private var showEmailConfirmBanner = false
+    @State private var showForgotPassword = false
 
     var body: some View {
         ScrollView {
@@ -27,21 +28,21 @@ struct AuthView: View {
                     .padding(.top, 56)
                     .padding(.bottom, 2)
 
-                    Text("MotorcycleTrackShare")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
+                    Text("Tread")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.textPrimary)
 
-                    Text("Track rides. Share the feeling.")
+                    Text("Privacy-first ride tracking.")
                         .font(.subheadline)
                         .foregroundStyle(Color(white: 0.55))
                 }
                 .padding(.bottom, 36)
 
-                // Card
+                // Auth card
                 VStack(spacing: 14) {
                     Picker("", selection: $isSignUp) {
-                        Text("Log In").tag(false)
-                        Text("Sign Up").tag(true)
+                        Text("Sign In").tag(false)
+                        Text("Create Account").tag(true)
                     }
                     .pickerStyle(.segmented)
                     .onChange(of: isSignUp) { _, _ in
@@ -53,9 +54,14 @@ struct AuthView: View {
                         HStack(spacing: 10) {
                             Image(systemName: "envelope.badge")
                                 .foregroundStyle(Color.appAccent)
-                            Text("Check your email to confirm your account.")
-                                .font(.subheadline)
-                                .foregroundStyle(.white)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Check your email")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                Text("Confirm your address to enable cloud sync.")
+                                    .font(.caption)
+                                    .foregroundStyle(Color(white: 0.65))
+                            }
                         }
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -84,10 +90,18 @@ struct AuthView: View {
                     }
 
                     PrimaryButton(
-                        title: isSignUp ? "Create Account" : "Log In",
+                        title: isSignUp ? "Create Account" : "Sign In",
                         isLoading: isBusy
                     ) {
                         Task { await submit() }
+                    }
+
+                    if !isSignUp {
+                        Button("Forgot Password?") {
+                            showForgotPassword = true
+                        }
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.appAccent)
                     }
                 }
                 .minimalCard()
@@ -108,8 +122,7 @@ struct AuthView: View {
                     SecondaryButton(title: "Continue without signing in") {
                         localOnlyMode = true
                     }
-
-                    Text("Rides and bikes are stored locally on this device only.")
+                    Text("Rides stay private and stored on this device only.")
                         .font(.caption)
                         .foregroundStyle(Color(white: 0.45))
                         .multilineTextAlignment(.center)
@@ -120,10 +133,13 @@ struct AuthView: View {
             }
         }
         .background(Color.appBg.ignoresSafeArea())
+        .sheet(isPresented: $showForgotPassword) {
+            ForgotPasswordSheet()
+        }
     }
 
     private func submit() async {
-        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedEmail    = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedEmail.isEmpty, !trimmedPassword.isEmpty else {
@@ -138,7 +154,7 @@ struct AuthView: View {
         do {
             if isSignUp {
                 try await authService.signUp(email: trimmedEmail, password: trimmedPassword)
-                if !authService.isLoggedIn {
+                if authService.isEmailConfirmationPending || !authService.isLoggedIn {
                     showEmailConfirmBanner = true
                 }
             } else {
@@ -159,12 +175,117 @@ struct AuthView: View {
         if msg.contains("email") && msg.contains("already") {
             return "An account with this email already exists."
         }
-        if msg.contains("password") && msg.contains("weak") {
+        if msg.contains("password") && (msg.contains("weak") || msg.contains("short")) {
             return "Password must be at least 6 characters."
         }
+        if msg.contains("email") && msg.contains("confirm") {
+            return "Please confirm your email address before signing in."
+        }
         if msg.contains("network") || msg.contains("offline") || msg.contains("connect") {
-            return "Network error. Please check your connection."
+            return "Network error. Check your connection and try again."
         }
         return "Something went wrong. Please try again."
+    }
+}
+
+// MARK: - Forgot Password Sheet
+
+struct ForgotPasswordSheet: View {
+    @EnvironmentObject private var authService: AuthService
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var email = ""
+    @State private var isBusy = false
+    @State private var sent = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    VStack(spacing: 8) {
+                        Image(systemName: "envelope.open")
+                            .font(.system(size: 40, weight: .semibold))
+                            .foregroundStyle(Color.appAccent)
+                            .padding(.top, 32)
+
+                        Text("Reset Password")
+                            .font(.title2.weight(.bold))
+                            .foregroundStyle(Color.textPrimary)
+
+                        Text("Enter your email and we'll send you a reset link.")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
+
+                    if sent {
+                        VStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 36))
+                                .foregroundStyle(.green)
+                            Text("Email sent!")
+                                .font(.headline)
+                                .foregroundStyle(Color.textPrimary)
+                            Text("Check your inbox for a password reset link.")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.textSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding()
+                    } else {
+                        VStack(spacing: 12) {
+                            TextField("Email address", text: $email)
+                                .textContentType(.emailAddress)
+                                .keyboardType(.emailAddress)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                                .textFieldStyle(.roundedBorder)
+
+                            if let errorMessage {
+                                Text(errorMessage)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.red)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+
+                            PrimaryButton(title: "Send Reset Link", isLoading: isBusy) {
+                                Task { await sendReset() }
+                            }
+                        }
+                        .minimalCard()
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .background(Color.appBg.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                        .foregroundStyle(Color.appAccent)
+                }
+            }
+        }
+    }
+
+    private func sendReset() async {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            errorMessage = "Please enter your email address."
+            return
+        }
+
+        isBusy = true
+        errorMessage = nil
+
+        do {
+            try await authService.sendPasswordReset(email: trimmed)
+            sent = true
+        } catch {
+            errorMessage = "Could not send reset email. Please check the address and try again."
+        }
+
+        isBusy = false
     }
 }

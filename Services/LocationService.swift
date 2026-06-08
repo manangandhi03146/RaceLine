@@ -1,10 +1,3 @@
-//
-//  LocationService.swift
-//  MotorcycleTrackShare
-//
-//  Created by Manan Gandhi on 1/10/26.
-//
-
 import Foundation
 import CoreLocation
 
@@ -13,6 +6,7 @@ final class LocationService: NSObject, ObservableObject {
     @Published var lat: Double?
     @Published var lon: Double?
     @Published var speedMps: Double?
+    @Published var altitudeM: Double?
 
     private let manager = CLLocationManager()
 
@@ -42,17 +36,16 @@ extension LocationService: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager,
                                      didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
-
         Task { @MainActor in
-            self.lat = loc.coordinate.latitude
-            self.lon = loc.coordinate.longitude
-            self.speedMps = (loc.speed >= 0) ? loc.speed : nil
+            self.lat       = loc.coordinate.latitude
+            self.lon       = loc.coordinate.longitude
+            self.speedMps  = (loc.speed >= 0) ? loc.speed : nil
+            self.altitudeM = loc.verticalAccuracy >= 0 ? loc.altitude : nil
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager,
                                      didFailWithError error: Error) {
-        print("Location error:", error)
+        print("LocationService error:", error)
     }
 }
-
