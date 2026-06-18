@@ -40,12 +40,25 @@ final class AuthService: ObservableObject {
         currentUser = client.auth.currentUser
     }
 
-    func signUp(email: String, password: String) async throws {
-        _ = try await client.auth.signUp(email: email, password: password)
-        let user = client.auth.currentUser
-        currentUser = user
-        // If user is nil after sign-up, email confirmation is pending
-        isEmailConfirmationPending = (user == nil)
+    enum SignUpOutcome {
+        case signedIn
+        case emailConfirmationRequired
+    }
+
+    @discardableResult
+    func signUp(email: String, password: String) async throws -> SignUpOutcome {
+        let response = try await client.auth.signUp(email: email, password: password)
+        let session = response.session
+        let user = response.user
+        if session != nil {
+            currentUser = client.auth.currentUser ?? user
+            isEmailConfirmationPending = false
+            return .signedIn
+        } else {
+            currentUser = nil
+            isEmailConfirmationPending = true
+            return .emailConfirmationRequired
+        }
     }
 
     func signOut() async throws {

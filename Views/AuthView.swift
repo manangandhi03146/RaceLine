@@ -47,39 +47,47 @@ struct AuthView: View {
                     .pickerStyle(.segmented)
                     .onChange(of: isSignUp) { _, _ in
                         errorMessage = nil
-                        showEmailConfirmBanner = false
                     }
 
                     if showEmailConfirmBanner {
-                        HStack(spacing: 10) {
-                            Image(systemName: "envelope.badge")
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "envelope.badge.fill")
+                                .font(.system(size: 22))
                                 .foregroundStyle(Color.appAccent)
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 Text("Check your email")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                Text("Confirm your address to enable cloud sync.")
+                                    .font(.subheadline.weight(.bold))
+                                    .foregroundStyle(Color.textPrimary)
+                                Text("We sent a confirmation link to \(email). Tap it, then come back and sign in.")
                                     .font(.caption)
-                                    .foregroundStyle(Color(white: 0.65))
+                                    .foregroundStyle(Color.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
+                            Spacer(minLength: 0)
                         }
-                        .padding(12)
+                        .padding(14)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.appAccent.opacity(0.12))
+                        .background(Color.appAccent.opacity(0.14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.appAccent.opacity(0.5), lineWidth: 1)
+                        )
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
 
                     VStack(spacing: 10) {
-                        TextField("Email", text: $email)
+                        TextField("", text: $email, prompt: .appPrompt("Email"))
                             .textContentType(.emailAddress)
                             .keyboardType(.emailAddress)
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
-                            .textFieldStyle(.roundedBorder)
+                            .foregroundStyle(Color.textPrimary)
+                            .appFieldChrome()
 
-                        SecureField("Password", text: $password)
+                        SecureField("", text: $password, prompt: .appPrompt("Password"))
                             .textContentType(isSignUp ? .newPassword : .password)
-                            .textFieldStyle(.roundedBorder)
+                            .foregroundStyle(Color.textPrimary)
+                            .appFieldChrome()
                     }
 
                     if let errorMessage {
@@ -97,11 +105,18 @@ struct AuthView: View {
                     }
 
                     if !isSignUp {
-                        Button("Forgot Password?") {
+                        Button {
                             showForgotPassword = true
+                        } label: {
+                            Text("Forgot Password?")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(Color.appAccent)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
                         }
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.appAccent)
+                        .buttonStyle(.plain)
                     }
                 }
                 .minimalCard()
@@ -146,19 +161,32 @@ struct AuthView: View {
             errorMessage = "Please enter your email and password."
             return
         }
+        guard trimmedEmail.contains("@"), trimmedEmail.contains(".") else {
+            errorMessage = "That email address doesn't look valid."
+            return
+        }
+        if isSignUp, trimmedPassword.count < 6 {
+            errorMessage = "Password must be at least 6 characters."
+            return
+        }
 
         isBusy = true
         errorMessage = nil
-        showEmailConfirmBanner = false
 
         do {
             if isSignUp {
-                try await authService.signUp(email: trimmedEmail, password: trimmedPassword)
-                if authService.isEmailConfirmationPending || !authService.isLoggedIn {
+                let outcome = try await authService.signUp(email: trimmedEmail, password: trimmedPassword)
+                switch outcome {
+                case .signedIn:
+                    showEmailConfirmBanner = false
+                case .emailConfirmationRequired:
                     showEmailConfirmBanner = true
+                    password = ""
+                    isSignUp = false
                 }
             } else {
                 try await authService.signIn(email: trimmedEmail, password: trimmedPassword)
+                showEmailConfirmBanner = false
             }
         } catch {
             errorMessage = friendlyError(error)
@@ -168,23 +196,33 @@ struct AuthView: View {
     }
 
     private func friendlyError(_ error: Error) -> String {
-        let msg = error.localizedDescription.lowercased()
+        let raw = error.localizedDescription
+        let msg = raw.lowercased()
         if msg.contains("invalid login credentials") || msg.contains("invalid_credentials") {
             return "Incorrect email or password."
         }
-        if msg.contains("email") && msg.contains("already") {
-            return "An account with this email already exists."
+        if msg.contains("already registered") ||
+            (msg.contains("user") && msg.contains("already")) ||
+            (msg.contains("email") && msg.contains("already")) {
+            return "An account with this email already exists. Try signing in."
         }
-        if msg.contains("password") && (msg.contains("weak") || msg.contains("short")) {
+        if msg.contains("password") && (msg.contains("at least") || msg.contains("weak") || msg.contains("short")) {
             return "Password must be at least 6 characters."
         }
-        if msg.contains("email") && msg.contains("confirm") {
+        if msg.contains("invalid") && msg.contains("email") {
+            return "That email address doesn't look valid."
+        }
+        if msg.contains("confirm") {
             return "Please confirm your email address before signing in."
         }
-        if msg.contains("network") || msg.contains("offline") || msg.contains("connect") {
+        if msg.contains("network") || msg.contains("offline") || msg.contains("connect") || msg.contains("internet") {
             return "Network error. Check your connection and try again."
         }
-        return "Something went wrong. Please try again."
+        if msg.contains("rate") || msg.contains("too many") {
+            return "Too many attempts. Please wait a moment and try again."
+        }
+        // Surface the underlying message so the user has something actionable.
+        return raw
     }
 }
 

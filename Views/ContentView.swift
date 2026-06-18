@@ -43,6 +43,8 @@ struct ContentView: View {
     @State private var showDuplicateAlert       = false
     @State private var reopenNameSheetAfterDuplicate = false
     @State private var saveFinalizeRetryPending = false
+    @State private var showStartRideTypePrompt  = false
+    @State private var showTrackModeWarning     = false
 
     // Ride list state
     @State private var expandedRideID: UUID?
@@ -63,19 +65,6 @@ struct ContentView: View {
                     ProfileView()
                         .environmentObject(rideStore)
                         .environmentObject(syncService)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarTrailing) {
-                                NavigationLink {
-                                    SettingsView()
-                                        .environmentObject(rideStore)
-                                        .environmentObject(syncService)
-                                        .environmentObject(authService)
-                                } label: {
-                                    Image(systemName: "gear")
-                                        .foregroundStyle(Color.appAccent)
-                                }
-                            }
-                        }
                 }
             } else {
                 calendarView
@@ -176,16 +165,17 @@ struct ContentView: View {
 
             // Stats + controls
             VStack(spacing: 0) {
-                // Top strip: time + distance
-                HStack(alignment: .top) {
-                    rideTopStat("TIME", recordingTime)
+                // Top strip: time + distance, stacked on the left
+                HStack {
+                    VStack(alignment: .leading, spacing: 8) {
+                        rideTopStat("TIME", recordingTime)
+                        rideTopStat("DIST", recordingDistance)
+                    }
                     Spacer()
-                    rideTopStat("DIST", recordingDistance)
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 10)
                 .shadow(color: .black.opacity(0.6), radius: 4, x: 0, y: 1)
-                .opacity(recorder.isRecording || recorder.summary != nil ? 1 : 0)
 
                 Spacer()
 
@@ -246,7 +236,12 @@ struct ContentView: View {
                             Text("Calibrate Lean Sensor")
                                 .font(.system(size: 15, weight: .regular))
                                 .foregroundStyle(Color.textSecondary)
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 10)
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
 
                     Button {
@@ -255,8 +250,7 @@ struct ContentView: View {
                             recorder.stop()
                             UIApplication.shared.isIdleTimerDisabled = false
                         } else {
-                            recorder.start(motion: motion, location: location, sampleHz: samplingRateHz)
-                            UIApplication.shared.isIdleTimerDisabled = true
+                            showStartRideTypePrompt = true
                         }
                     } label: {
                         HStack(spacing: 10) {
@@ -297,6 +291,19 @@ struct ContentView: View {
             Button("Don't Save", role: .destructive) { }
             Button("Cancel", role: .cancel) { }
         }
+        .confirmationDialog("Choose Ride Type", isPresented: $showStartRideTypePrompt, titleVisibility: .visible) {
+            Button("Street") { beginRide(rideType: .street) }
+            Button("Track")  { showTrackModeWarning = true }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Pick how you'll be riding so we can label and surface this ride correctly.")
+        }
+        .alert("Track Mode", isPresented: $showTrackModeWarning) {
+            Button("Cancel", role: .cancel) { }
+            Button("Start Track Ride") { beginRide(rideType: .track) }
+        } message: {
+            Text("Track mode is not a lap timer or official timing device. Use only on closed circuits.")
+        }
         .sheet(isPresented: $showNameSheet) {
             SaveRideSheet(
                 name: $pendingName,
@@ -312,6 +319,12 @@ struct ContentView: View {
             )
             .presentationDetents([.height(520)])
         }
+    }
+
+    private func beginRide(rideType: RideType) {
+        pendingRideType = rideType
+        recorder.start(motion: motion, location: location, sampleHz: samplingRateHz)
+        UIApplication.shared.isIdleTimerDisabled = true
     }
 
     private func saveRide() {
@@ -388,18 +401,24 @@ struct ContentView: View {
     }
 
     private var maxLeanDisplayText: String {
-        recorder.isRecording
-            ? String(format: "%.0f°", recorder.liveMaxAbsLeanDeg)
-            : String(format: "%.0f°", recorder.summary?.maxAbsLeanDeg ?? 0)
+        String(format: "%.0f°", recorder.liveMaxAbsLeanDeg)
     }
 
     private var recordingTime: String {
-        recorder.summary?.durationText ?? (recorder.isRecording ? "0:00:00" : "—")
+        formatDuration(recorder.isRecording ? recorder.liveDurationSec : 0)
     }
 
     private var recordingDistance: String {
-        guard let s = recorder.summary else { return recorder.isRecording ? "0.00 mi" : "—" }
-        return String(format: "%.2f mi", s.distanceMi)
+        let meters = recorder.isRecording ? recorder.liveDistanceM : 0
+        return String(format: "%.2f mi", meters * 0.000621371)
+    }
+
+    private func formatDuration(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds))
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        let s = total % 60
+        return String(format: "%d:%02d:%02d", h, m, s)
     }
 
     private func rideTopStat(_ label: String, _ value: String) -> some View {
@@ -410,7 +429,7 @@ struct ContentView: View {
                 .foregroundStyle(Color.textGhost)
             Text(value)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color.textPrimary)
+                .foregroundStyle(Color.appAccent)
                 .monospacedDigit()
         }
     }
@@ -495,11 +514,14 @@ struct ContentView: View {
                 Image(systemName: "calendar")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(Color.appAccent)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
         .background(Color.appBg)
     }
 
@@ -631,7 +653,7 @@ struct ContentView: View {
     private var bottomNavigationBar: some View {
         HStack(spacing: 0) {
             navBarButton(title: "Service",     systemImage: "wrench.and.screwdriver",  tab: .maintenance)
-            navBarButton(title: "Garage",      systemImage: "car.fill",                tab: .garage)
+            navBarButton(title: "Garage",      systemImage: "motorcycle",              tab: .garage)
             navBarButton(title: "Ride",        systemImage: "speedometer",             tab: .ride)
             navBarButton(title: "Rides",       systemImage: "calendar",               tab: .calendar)
             navBarButton(title: "Profile",     systemImage: "person.fill",             tab: .profile)
@@ -650,7 +672,8 @@ struct ContentView: View {
         return Button { selectedTab = tab } label: {
             VStack(spacing: 3) {
                 Image(systemName: systemImage)
-                    .font(.system(size: isActive ? 20 : 18, weight: isActive ? .semibold : .regular))
+                    .font(.system(size: 20, weight: isActive ? .semibold : .regular))
+                    .frame(height: 22)
                 Text(title)
                     .font(.system(size: 9, weight: isActive ? .semibold : .regular))
             }
@@ -781,6 +804,7 @@ private struct RideDetailScreen: View {
     @State private var photoImage: UIImage?
     @State private var notesText: String
     @State private var tagsText: String
+    @State private var nameSaveTask: Task<Void, Never>?
     @State private var showDuplicateAlert   = false
     @State private var showRenameFailedAlert = false
     @State private var showBikeSaveFailedAlert = false
@@ -826,11 +850,17 @@ private struct RideDetailScreen: View {
             VStack(spacing: 12) {
                 // Header
                 HStack {
-                    Button { onClose() } label: {
+                    Button {
+                        commitNameSave()
+                        onClose()
+                    } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 28))
                             .foregroundStyle(Color.textGhost)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     Spacer()
 
                     // Mode badge
@@ -857,30 +887,27 @@ private struct RideDetailScreen: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Color.appAccent)
                         .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 10)
+                        .frame(minHeight: 44)
                         .background(Color.appAccent.opacity(0.12))
                         .clipShape(Capsule())
+                        .contentShape(Capsule())
                     }
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 4)
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        // Name
-                        VStack(alignment: .leading, spacing: 8) {
-                            TextField("Ride name", text: $draftName)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.title3.weight(.semibold))
-                            Button("Save Name") {
-                                switch onRename(draftName) {
-                                case .success: break
-                                case .duplicateName: showDuplicateAlert = true
-                                case .notFound, .writeFailed: showRenameFailedAlert = true
-                                }
+                        // Name (auto-saves)
+                        TextField("Ride name", text: $draftName)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(Color.textPrimary)
+                            .appFieldChrome()
+                            .onChange(of: draftName) { _, newValue in
+                                scheduleNameSave(newValue)
                             }
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Color.appAccent)
-                        }
+                            .onSubmit { commitNameSave() }
 
                         // Bike picker
                         Menu {
@@ -931,16 +958,23 @@ private struct RideDetailScreen: View {
                                 .textFieldStyle(.roundedBorder)
                                 .autocorrectionDisabled()
                                 .textInputAutocapitalization(.never)
-                            Button("Save Notes & Tags") {
+                            Button {
                                 let notes = notesText.trimmingCharacters(in: .whitespacesAndNewlines)
                                 let tags = tagsText
                                     .split(separator: ",")
                                     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
                                     .filter { !$0.isEmpty }
                                 _ = onUpdateNotes(notes.isEmpty ? nil : notes, tags)
+                            } label: {
+                                Text("Save Notes & Tags")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Color.appAccent)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 10)
+                                    .frame(minHeight: 44)
+                                    .contentShape(Rectangle())
                             }
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Color.appAccent)
+                            .buttonStyle(.plain)
                         }
 
                         // Photo
@@ -1123,6 +1157,27 @@ private struct RideDetailScreen: View {
         return formatter.string(from: date)
     }
 
+    private func scheduleNameSave(_ candidate: String) {
+        nameSaveTask?.cancel()
+        nameSaveTask = Task {
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run { commitNameSave() }
+        }
+    }
+
+    private func commitNameSave() {
+        nameSaveTask?.cancel()
+        nameSaveTask = nil
+        let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != ride.name else { return }
+        switch onRename(trimmed) {
+        case .success: break
+        case .duplicateName: showDuplicateAlert = true
+        case .notFound, .writeFailed: showRenameFailedAlert = true
+        }
+    }
+
     private func metricText(_ field: RideMetricField) -> String {
         let av = ride.metricAvailability ?? .allAvailable
         switch field {
@@ -1163,14 +1218,24 @@ private struct RideDayPickerSheet: View {
         VStack(spacing: 14) {
             HStack {
                 Button { shiftMonth(by: -1) } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.appAccent)
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.appAccent)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 Spacer()
                 Text(monthTitle(monthAnchor)).font(.headline).foregroundStyle(Color.textPrimary)
                 Spacer()
                 Button { shiftMonth(by: 1) } label: {
-                    Image(systemName: "chevron.right").font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.appAccent)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.appAccent)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
             HStack(spacing: 0) {
                 ForEach(weekdaySymbols(), id: \.self) { day in
@@ -1192,9 +1257,11 @@ private struct RideDayPickerSheet: View {
                                 Text("\(day)").font(.body.weight(.semibold))
                                     .foregroundStyle(hasRide ? Color.white : Color.textTertiary)
                             }
-                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .disabled(!hasRide)
                     } else {
                         Color.clear.frame(maxWidth: .infinity, minHeight: 36)
                     }
@@ -1224,6 +1291,8 @@ private struct RideDayPickerSheet: View {
         for offset in 0..<daysInMonth {
             if let day = calendar.date(byAdding: .day, value: offset, to: start) { values.append(day) }
         }
+        // Pad to 42 cells (6 rows × 7 cols) so grid height is constant across months
+        while values.count < 42 { values.append(nil) }
         return values
     }
     private func weekdaySymbols() -> [String] {

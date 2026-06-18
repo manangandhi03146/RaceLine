@@ -115,11 +115,14 @@ struct MaintenanceView: View {
                 Image(systemName: "plus")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(Color.appAccent)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
         .background(Color.appBg)
     }
 
@@ -163,10 +166,12 @@ struct MaintenanceView: View {
             Text(label)
                 .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                 .foregroundStyle(isSelected ? .white : Color.textSecondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .frame(minHeight: 36)
                 .background(isSelected ? Color.appAccent : Color.appSurface2)
                 .clipShape(Capsule())
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -191,6 +196,13 @@ private struct MaintenanceRecordRow: View {
     private var isDue: Bool { record.isDateReminderDue() }
 
     private var dueBadge: String? {
+        if let miles = record.reminderIntervalMiles {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .decimal
+            formatter.maximumFractionDigits = 0
+            let formatted = formatter.string(from: miles as NSNumber) ?? "\(Int(miles))"
+            return "Every \(formatted) mi"
+        }
         guard let days = record.daysTilDue() else { return nil }
         if days < 0 { return "Overdue" }
         if days == 0 { return "Due today" }
@@ -292,7 +304,7 @@ private struct AddMaintenanceSheet: View {
     @State private var selectedBikeID: UUID?
     @State private var odometerText = ""
     @State private var notes = ""
-    @State private var reminderDays: Int? = nil
+    @State private var reminderMiles: Double? = nil
     @State private var receiptPhoto: UIImage?
     @State private var showPhotoDialog = false
     @State private var photoSource: PhotoPickerSource?
@@ -305,146 +317,184 @@ private struct AddMaintenanceSheet: View {
         }
     }
 
-    private let reminderOptions: [(label: String, days: Int?)] = [
+    private let reminderOptions: [(label: String, miles: Double?)] = [
         ("No reminder", nil),
-        ("30 days", 30),
-        ("60 days", 60),
-        ("90 days", 90),
-        ("6 months", 180),
-        ("1 year", 365)
+        ("Every 500 mi", 500),
+        ("Every 1,000 mi", 1_000),
+        ("Every 2,000 mi", 2_000),
+        ("Every 3,000 mi", 3_000),
+        ("Every 5,000 mi", 5_000),
+        ("Every 10,000 mi", 10_000)
     ]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Log Maintenance")
-                    .font(.headline)
-                    .padding(.top, 4)
+        ZStack {
+            Color.appBg.ignoresSafeArea()
 
-                // Type
-                Picker("Type", selection: $type) {
-                    ForEach(MaintenanceType.allCases, id: \.self) { t in
-                        Label(t.displayName, systemImage: t.iconName).tag(t)
-                    }
-                }
-                .pickerStyle(.menu)
-                .onChange(of: type) { _, newType in
-                    if title.isEmpty || MaintenanceType.allCases.map(\.displayName).contains(title) {
-                        title = newType.displayName
-                    }
-                }
-                .onAppear { if title.isEmpty { title = type.displayName } }
-
-                // Title
-                TextField("Title", text: $title)
-                    .textFieldStyle(.roundedBorder)
-
-                // Date
-                DatePicker("Date", selection: $date, displayedComponents: [.date])
-                    .foregroundStyle(Color.textPrimary)
-
-                // Bike
-                if !garageStore.bikes.isEmpty {
-                    Menu {
-                        Button("No specific bike") { selectedBikeID = nil }
-                        ForEach(garageStore.bikes.filter { !$0.effectiveIsArchived }) { bike in
-                            Button(bike.title) { selectedBikeID = bike.id }
-                        }
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Bike")
-                                    .font(.caption)
-                                    .foregroundStyle(Color.textSecondary)
-                                Text(selectedBikeLabel)
-                                    .foregroundStyle(Color.textPrimary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 13))
-                                .foregroundStyle(Color.textSecondary)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(Color.appSurface2)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                }
-
-                // Odometer
-                TextField("Odometer at service (miles, optional)", text: $odometerText)
-                    .textFieldStyle(.roundedBorder)
-                    .keyboardType(.decimalPad)
-
-                // Notes
-                TextField("Notes (optional)", text: $notes, axis: .vertical)
-                    .lineLimit(3, reservesSpace: true)
-                    .textFieldStyle(.roundedBorder)
-
-                // Reminder
-                Picker("Reminder", selection: Binding(
-                    get: { reminderOptions.firstIndex(where: { $0.days == reminderDays }) ?? 0 },
-                    set: { reminderDays = reminderOptions[$0].days }
-                )) {
-                    ForEach(reminderOptions.indices, id: \.self) { i in
-                        Text(reminderOptions[i].label).tag(i)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                // Receipt photo
-                Button { showPhotoDialog = true } label: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.secondary.opacity(0.12))
-                            .frame(height: 80)
-                        if let receiptPhoto {
-                            Image(uiImage: receiptPhoto)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(height: 80)
-                                .clipped()
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            VStack(spacing: 0) {
+                AppSheetHeader(
+                    title: "Log Maintenance",
+                    onCancel: onCancel,
+                    isSaveDisabled: type == .custom && title.trimmingCharacters(in: .whitespaces).isEmpty,
+                    onSave: {
+                        let finalTitle: String
+                        if type == .custom {
+                            let trimmed = title.trimmingCharacters(in: .whitespaces)
+                            finalTitle = trimmed.isEmpty ? "Custom" : trimmed
                         } else {
-                            HStack(spacing: 8) {
-                                Image(systemName: "doc.text.viewfinder")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(Color.appAccent)
-                                Text("Add Receipt Photo (optional)")
-                                    .font(.subheadline)
-                                    .foregroundStyle(Color.textSecondary)
-                            }
+                            finalTitle = type.displayName
                         }
-                    }
-                }
-                .buttonStyle(.plain)
-
-                HStack {
-                    Button("Cancel") { onCancel() }
-                        .buttonStyle(.bordered)
-                    Spacer()
-                    Button("Save") {
                         let record = MaintenanceRecord(
                             bikeID: selectedBikeID,
                             type: type,
-                            title: title.isEmpty ? type.displayName : title,
+                            title: finalTitle,
                             date: date,
                             odometerMiles: Double(odometerText),
                             notes: notes.isEmpty ? nil : notes,
-                            reminderIntervalDays: reminderDays
+                            reminderIntervalDays: nil,
+                            reminderIntervalMiles: reminderMiles
                         )
                         onSave(record, receiptPhoto)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.appAccent)
-                    .disabled(title.isEmpty && type == .custom)
+                )
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        AppFieldGroup(label: "TYPE") {
+                            Menu {
+                                ForEach(MaintenanceType.allCases, id: \.self) { t in
+                                    Button { type = t } label: {
+                                        Label(t.displayName, systemImage: t.iconName)
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: type.iconName)
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(Color.appAccent)
+                                    Text(type.displayName)
+                                        .foregroundStyle(Color.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(Color.textSecondary)
+                                }
+                                .appFieldChrome()
+                            }
+                        }
+
+                        if type == .custom {
+                            AppFieldGroup(label: "TITLE") {
+                                TextField("", text: $title, prompt: .appPrompt("Title"))
+                                    .foregroundStyle(Color.textPrimary)
+                                    .appFieldChrome()
+                            }
+                        }
+
+                        AppFieldGroup(label: "DATE") {
+                            DatePicker("", selection: $date, displayedComponents: [.date])
+                                .labelsHidden()
+                                .tint(Color.appAccent)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .appFieldChrome()
+                        }
+
+                        if !garageStore.bikes.isEmpty {
+                            AppFieldGroup(label: "BIKE") {
+                                Menu {
+                                    Button("No specific bike") { selectedBikeID = nil }
+                                    ForEach(garageStore.bikes.filter { !$0.effectiveIsArchived }) { bike in
+                                        Button(bike.title) { selectedBikeID = bike.id }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(selectedBikeLabel)
+                                            .foregroundStyle(Color.textPrimary)
+                                        Spacer()
+                                        Image(systemName: "chevron.down")
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundStyle(Color.textSecondary)
+                                    }
+                                    .appFieldChrome()
+                                }
+                            }
+                        }
+
+                        AppFieldGroup(label: "ODOMETER (OPTIONAL)") {
+                            TextField("", text: $odometerText,
+                                      prompt: Text("Miles at service").foregroundColor(Color.textGhost))
+                                .keyboardType(.decimalPad)
+                                .foregroundStyle(Color.textPrimary)
+                                .appFieldChrome()
+                        }
+
+                        AppFieldGroup(label: "NOTES (OPTIONAL)") {
+                            TextField("", text: $notes, axis: .vertical)
+                                .lineLimit(3, reservesSpace: true)
+                                .foregroundStyle(Color.textPrimary)
+                                .appFieldChrome()
+                        }
+
+                        AppFieldGroup(label: "REMINDER") {
+                            Menu {
+                                ForEach(reminderOptions.indices, id: \.self) { i in
+                                    Button(reminderOptions[i].label) {
+                                        reminderMiles = reminderOptions[i].miles
+                                    }
+                                }
+                            } label: {
+                                HStack {
+                                    Text(selectedReminderLabel)
+                                        .foregroundStyle(Color.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(Color.textSecondary)
+                                }
+                                .appFieldChrome()
+                            }
+                        }
+
+                        AppFieldGroup(label: "RECEIPT PHOTO (OPTIONAL)") {
+                            Button { showPhotoDialog = true } label: {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.appSurface2)
+                                        .frame(height: 110)
+                                    if let receiptPhoto {
+                                        Image(uiImage: receiptPhoto)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(height: 110)
+                                            .clipped()
+                                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    } else {
+                                        VStack(spacing: 6) {
+                                            Image(systemName: "doc.text.viewfinder")
+                                                .font(.system(size: 22, weight: .semibold))
+                                                .foregroundStyle(Color.appAccent)
+                                            Text("Add Receipt Photo")
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(Color.textPrimary)
+                                        }
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 24)
                 }
-                .padding(.top, 4)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 16)
         }
+        .onChange(of: type) { _, newType in
+            if title.isEmpty || MaintenanceType.allCases.map(\.displayName).contains(title) {
+                title = newType.displayName
+            }
+        }
+        .onAppear { if title.isEmpty { title = type.displayName } }
         .confirmationDialog("Receipt Photo", isPresented: $showPhotoDialog, titleVisibility: .visible) {
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
                 Button("Take Photo") { photoSource = .camera }
@@ -456,6 +506,10 @@ private struct AddMaintenanceSheet: View {
             UIKitImagePicker(sourceType: src.sourceType) { receiptPhoto = $0 }
                 .ignoresSafeArea()
         }
+    }
+
+    private var selectedReminderLabel: String {
+        reminderOptions.first(where: { $0.miles == reminderMiles })?.label ?? "No reminder"
     }
 
     private var selectedBikeLabel: String {
@@ -482,7 +536,7 @@ private struct EditMaintenanceSheet: View {
     @State private var selectedBikeID: UUID?
     @State private var odometerText: String
     @State private var notes: String
-    @State private var reminderDays: Int?
+    @State private var reminderMiles: Double?
     @State private var receiptPhoto: UIImage?
     @State private var showPhotoDialog = false
     @State private var photoSource: PhotoPickerSource?
@@ -495,13 +549,14 @@ private struct EditMaintenanceSheet: View {
         }
     }
 
-    private let reminderOptions: [(label: String, days: Int?)] = [
+    private let reminderOptions: [(label: String, miles: Double?)] = [
         ("No reminder", nil),
-        ("30 days", 30),
-        ("60 days", 60),
-        ("90 days", 90),
-        ("6 months", 180),
-        ("1 year", 365)
+        ("Every 500 mi", 500),
+        ("Every 1,000 mi", 1_000),
+        ("Every 2,000 mi", 2_000),
+        ("Every 3,000 mi", 3_000),
+        ("Every 5,000 mi", 5_000),
+        ("Every 10,000 mi", 10_000)
     ]
 
     init(record: MaintenanceRecord, receiptURL: URL?, garageStore: GarageStore,
@@ -518,138 +573,182 @@ private struct EditMaintenanceSheet: View {
         _selectedBikeID = State(initialValue: record.bikeID)
         _odometerText = State(initialValue: record.odometerMiles.map { String(format: "%.0f", $0) } ?? "")
         _notes = State(initialValue: record.notes ?? "")
-        _reminderDays = State(initialValue: record.reminderIntervalDays)
+        _reminderMiles = State(initialValue: record.reminderIntervalMiles)
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Edit Record")
-                        .font(.headline)
-                        .padding(.top, 4)
-                    Spacer()
-                    Button("Save") {
+        ZStack {
+            Color.appBg.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                AppSheetHeader(
+                    title: "Edit Record",
+                    onCancel: onCancel,
+                    isSaveDisabled: type == .custom && title.trimmingCharacters(in: .whitespaces).isEmpty,
+                    onSave: {
+                        let finalTitle: String
+                        if type == .custom {
+                            let trimmed = title.trimmingCharacters(in: .whitespaces)
+                            finalTitle = trimmed.isEmpty ? "Custom" : trimmed
+                        } else {
+                            finalTitle = type.displayName
+                        }
                         let updated = MaintenanceRecord(
                             id: record.id, createdAt: record.createdAt,
                             bikeID: selectedBikeID, type: type,
-                            title: title.isEmpty ? type.displayName : title,
+                            title: finalTitle,
                             date: date,
                             odometerMiles: Double(odometerText),
                             notes: notes.isEmpty ? nil : notes,
-                            reminderIntervalDays: reminderDays,
-                            reminderIntervalMiles: record.reminderIntervalMiles,
+                            reminderIntervalDays: nil,
+                            reminderIntervalMiles: reminderMiles,
                             receiptPhotoFilename: record.receiptPhotoFilename,
                             isArchived: record.isArchived,
                             remoteID: record.remoteID, syncStatus: record.syncStatus
                         )
                         onSave(updated, receiptPhoto)
                     }
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.appAccent)
-                }
+                )
 
-                Picker("Type", selection: $type) {
-                    ForEach(MaintenanceType.allCases, id: \.self) { t in
-                        Label(t.displayName, systemImage: t.iconName).tag(t)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                TextField("Title", text: $title)
-                    .textFieldStyle(.roundedBorder)
-
-                DatePicker("Date", selection: $date, displayedComponents: [.date])
-                    .foregroundStyle(Color.textPrimary)
-
-                if !garageStore.bikes.isEmpty {
-                    Menu {
-                        Button("No specific bike") { selectedBikeID = nil }
-                        ForEach(garageStore.bikes.filter { !$0.effectiveIsArchived }) { bike in
-                            Button(bike.title) { selectedBikeID = bike.id }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        AppFieldGroup(label: "TYPE") {
+                            Menu {
+                                ForEach(MaintenanceType.allCases, id: \.self) { t in
+                                    Button { type = t } label: {
+                                        Label(t.displayName, systemImage: t.iconName)
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: type.iconName)
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(Color.appAccent)
+                                    Text(type.displayName)
+                                        .foregroundStyle(Color.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(Color.textSecondary)
+                                }
+                                .appFieldChrome()
+                            }
                         }
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Bike")
-                                    .font(.caption)
-                                    .foregroundStyle(Color.textSecondary)
-                                Text(selectedBikeLabel)
+
+                        if type == .custom {
+                            AppFieldGroup(label: "TITLE") {
+                                TextField("", text: $title, prompt: .appPrompt("Title"))
                                     .foregroundStyle(Color.textPrimary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 13))
-                                .foregroundStyle(Color.textSecondary)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(Color.appSurface2)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                }
-
-                TextField("Odometer at service (miles, optional)", text: $odometerText)
-                    .textFieldStyle(.roundedBorder)
-                    .keyboardType(.decimalPad)
-
-                TextField("Notes (optional)", text: $notes, axis: .vertical)
-                    .lineLimit(3, reservesSpace: true)
-                    .textFieldStyle(.roundedBorder)
-
-                Picker("Reminder", selection: Binding(
-                    get: { reminderOptions.firstIndex(where: { $0.days == reminderDays }) ?? 0 },
-                    set: { reminderDays = reminderOptions[$0].days }
-                )) {
-                    ForEach(reminderOptions.indices, id: \.self) { i in
-                        Text(reminderOptions[i].label).tag(i)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                // Receipt photo
-                Button { showPhotoDialog = true } label: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.secondary.opacity(0.12))
-                            .frame(height: 80)
-                        if let img = receiptPhoto {
-                            Image(uiImage: img)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(height: 80)
-                                .clipped()
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        } else if let url = receiptURL,
-                                  let data = try? Data(contentsOf: url),
-                                  let img = UIImage(data: data) {
-                            Image(uiImage: img)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(height: 80)
-                                .clipped()
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        } else {
-                            HStack(spacing: 8) {
-                                Image(systemName: "doc.text.viewfinder")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(Color.appAccent)
-                                Text("Add Receipt Photo (optional)")
-                                    .font(.subheadline)
-                                    .foregroundStyle(Color.textSecondary)
+                                    .appFieldChrome()
                             }
                         }
-                    }
-                }
-                .buttonStyle(.plain)
 
-                Button("Cancel") { onCancel() }
-                    .buttonStyle(.bordered)
-                    .padding(.top, 4)
+                        AppFieldGroup(label: "DATE") {
+                            DatePicker("", selection: $date, displayedComponents: [.date])
+                                .labelsHidden()
+                                .tint(Color.appAccent)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .appFieldChrome()
+                        }
+
+                        if !garageStore.bikes.isEmpty {
+                            AppFieldGroup(label: "BIKE") {
+                                Menu {
+                                    Button("No specific bike") { selectedBikeID = nil }
+                                    ForEach(garageStore.bikes.filter { !$0.effectiveIsArchived }) { bike in
+                                        Button(bike.title) { selectedBikeID = bike.id }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(selectedBikeLabel)
+                                            .foregroundStyle(Color.textPrimary)
+                                        Spacer()
+                                        Image(systemName: "chevron.down")
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundStyle(Color.textSecondary)
+                                    }
+                                    .appFieldChrome()
+                                }
+                            }
+                        }
+
+                        AppFieldGroup(label: "ODOMETER (OPTIONAL)") {
+                            TextField("", text: $odometerText, prompt: .appPrompt("Miles at service"))
+                                .keyboardType(.decimalPad)
+                                .foregroundStyle(Color.textPrimary)
+                                .appFieldChrome()
+                        }
+
+                        AppFieldGroup(label: "NOTES (OPTIONAL)") {
+                            TextField("", text: $notes, axis: .vertical)
+                                .lineLimit(3, reservesSpace: true)
+                                .foregroundStyle(Color.textPrimary)
+                                .appFieldChrome()
+                        }
+
+                        AppFieldGroup(label: "REMINDER") {
+                            Menu {
+                                ForEach(reminderOptions.indices, id: \.self) { i in
+                                    Button(reminderOptions[i].label) {
+                                        reminderMiles = reminderOptions[i].miles
+                                    }
+                                }
+                            } label: {
+                                HStack {
+                                    Text(selectedReminderLabel)
+                                        .foregroundStyle(Color.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(Color.textSecondary)
+                                }
+                                .appFieldChrome()
+                            }
+                        }
+
+                        AppFieldGroup(label: "RECEIPT PHOTO (OPTIONAL)") {
+                            Button { showPhotoDialog = true } label: {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.appSurface2)
+                                        .frame(height: 110)
+                                    if let img = receiptPhoto {
+                                        Image(uiImage: img)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(height: 110)
+                                            .clipped()
+                                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    } else if let url = receiptURL,
+                                              let data = try? Data(contentsOf: url),
+                                              let img = UIImage(data: data) {
+                                        Image(uiImage: img)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(height: 110)
+                                            .clipped()
+                                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    } else {
+                                        VStack(spacing: 6) {
+                                            Image(systemName: "doc.text.viewfinder")
+                                                .font(.system(size: 22, weight: .semibold))
+                                                .foregroundStyle(Color.appAccent)
+                                            Text("Replace Receipt Photo")
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(Color.textPrimary)
+                                        }
+                                    }
+                                }
+                                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 24)
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 16)
         }
         .confirmationDialog("Receipt Photo", isPresented: $showPhotoDialog, titleVisibility: .visible) {
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
@@ -664,6 +763,10 @@ private struct EditMaintenanceSheet: View {
         }
     }
 
+    private var selectedReminderLabel: String {
+        reminderOptions.first(where: { $0.miles == reminderMiles })?.label ?? "No reminder"
+    }
+
     private var selectedBikeLabel: String {
         guard let id = selectedBikeID,
               let bike = garageStore.bikes.first(where: { $0.id == id }) else {
@@ -672,3 +775,4 @@ private struct EditMaintenanceSheet: View {
         return bike.title
     }
 }
+

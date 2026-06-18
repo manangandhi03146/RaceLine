@@ -8,6 +8,8 @@ final class RideRecorder: ObservableObject {
     @Published private(set) var summary: RideSummary?
     @Published private(set) var route: [RidePoint] = []
     @Published private(set) var liveMaxAbsLeanDeg: Double = 0
+    @Published private(set) var liveDurationSec: Double = 0
+    @Published private(set) var liveDistanceM: Double = 0
 
     private var samples: [RideSample] = []
     private var recordingTask: Task<Void, Never>?
@@ -40,6 +42,8 @@ final class RideRecorder: ObservableObject {
         samples.removeAll()
         route.removeAll()
         liveMaxAbsLeanDeg = 0
+        liveDurationSec = 0
+        liveDistanceM = 0
 
         startTime = Date()
         distanceM = 0
@@ -75,6 +79,8 @@ final class RideRecorder: ObservableObject {
 
         recordingTask?.cancel()
         recordingTask = nil
+
+        liveMaxAbsLeanDeg = 0
 
         let end = Date()
         let start = startTime ?? end
@@ -122,12 +128,17 @@ final class RideRecorder: ObservableObject {
 
         let now = Date().timeIntervalSince1970
 
+        if let start = startTime {
+            liveDurationSec = Date().timeIntervalSince(start)
+        }
+
         // GPS + distance + route
         if let lat = location.lat, let lon = location.lon {
             if let last = lastCoord {
                 let segment = haversineMeters(lat1: last.lat, lon1: last.lon, lat2: lat, lon2: lon)
                 if segment.isFinite && segment >= 0 && segment < 250 {
                     distanceM += segment
+                    liveDistanceM = distanceM
                     if segment > 3 {
                         route.append(RidePoint(lat: lat, lon: lon))
                     }

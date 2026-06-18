@@ -3,6 +3,7 @@ import SwiftUI
 struct ProfileView: View {
     @EnvironmentObject private var authService: AuthService
     @EnvironmentObject private var rideStore: RideStore
+    @EnvironmentObject private var syncService: SyncService
     @AppStorage("localOnlyMode") private var localOnlyMode: Bool = false
     @AppStorage("defaultStorageMode") private var defaultStorageModeRaw: String = StorageMode.localOnly.rawValue
 
@@ -146,7 +147,9 @@ struct ProfileView: View {
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(.red)
                                 .frame(maxWidth: .infinity, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     } else {
                         PrimaryButton(title: "Sign In or Create Account") {
                             showSignInPrompt = true
@@ -177,18 +180,20 @@ struct ProfileView: View {
                     Text("Privacy Policy")
                         .font(.caption)
                         .foregroundStyle(Color.appAccent)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 12)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
-                .padding(.top, 24)
+                .buttonStyle(.plain)
+                .padding(.top, 12)
 
                 Spacer(minLength: 100)
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) { profileHeader }
         .background(Color.appBg.ignoresSafeArea())
-        .navigationTitle("Profile")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.appSurface, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar(.hidden, for: .navigationBar)
         .alert("Sign Out Failed", isPresented: $showLogoutError) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -224,6 +229,32 @@ struct ProfileView: View {
         .sheet(isPresented: $showPrivacyPolicy) {
             PrivacyPolicySheet()
         }
+    }
+
+    private var profileHeader: some View {
+        HStack {
+            Text("Profile")
+                .font(.system(size: 34, weight: .bold))
+                .foregroundStyle(.white)
+            Spacer()
+            NavigationLink {
+                SettingsView()
+                    .environmentObject(rideStore)
+                    .environmentObject(syncService)
+                    .environmentObject(authService)
+            } label: {
+                Image(systemName: "gear")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+        .background(Color.appBg)
     }
 
     private func logOut() async {

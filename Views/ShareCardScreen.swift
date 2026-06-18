@@ -88,16 +88,14 @@ struct ShareCardScreen: View {
         VStack(spacing: 0) {
             cardPreviewSection
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    selectRideSection
-                    backgroundPhotoSection
-                    customizeSection
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 20)
-                .padding(.bottom, 100)
+            VStack(alignment: .leading, spacing: 20) {
+                backgroundPhotoSection
+                customizeSection
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 18)
+            .padding(.bottom, 16)
         }
         .background(Color.appBg.ignoresSafeArea())
         .navigationTitle("Share")
@@ -344,15 +342,19 @@ struct ShareCardScreen: View {
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Color.appAccent)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
         } else if backgroundUIImage != nil && selectedSummaryAndRoute != nil {
             ProgressView()
                 .tint(Color.appAccent)
                 .scaleEffect(0.85)
+                .frame(width: 44, height: 44)
         } else {
             Image(systemName: "square.and.arrow.up")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Color.textGhost)
+                .frame(width: 44, height: 44)
         }
     }
 

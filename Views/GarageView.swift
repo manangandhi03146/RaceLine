@@ -177,11 +177,14 @@ struct GarageView: View {
                 Image(systemName: "plus")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(Color.appAccent)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
         .background(Color.appBg)
     }
 
@@ -284,7 +287,6 @@ private struct AddBikeSheet: View {
     let onSave: (String, Int?, String, String, UIImage?) -> Void
     let onCancel: () -> Void
 
-    @State private var nickname = ""
     @State private var yearText = ""
     @State private var selectedMake = ""
     @State private var selectedModel = ""
@@ -297,124 +299,142 @@ private struct AddBikeSheet: View {
     @State private var showModelSearch = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Add Bike")
-                    .font(.headline)
+        ZStack {
+            Color.appBg.ignoresSafeArea()
 
-                TextField("Nickname (optional)", text: $nickname)
-                    .textFieldStyle(.roundedBorder)
-
-                TextField("Year (optional)", text: $yearText)
-                    .textFieldStyle(.roundedBorder)
-                    .keyboardType(.numberPad)
-
-                if catalogService.isLoadingMakes && catalogService.makes.isEmpty {
-                    ProgressView("Loading motorcycle makes...")
-                } else if catalogService.makes.isEmpty {
-                    TextField("Make", text: $manualMake)
-                        .textFieldStyle(.roundedBorder)
-
-                    if let message = catalogService.makesErrorMessage {
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            VStack(spacing: 0) {
+                AppSheetHeader(
+                    title: "Add Bike",
+                    onCancel: onCancel,
+                    saveLabel: "Save Bike",
+                    isSaveDisabled: parsedYear == nil || resolvedMake.isEmpty || resolvedModel.isEmpty,
+                    onSave: {
+                        onSave("", parsedYear, resolvedMake, resolvedModel, selectedPhoto)
                     }
-                } else {
-                    CatalogPickerButton(
-                        title: "Make",
-                        selection: selectedMake.isEmpty ? "Select make" : selectedMake,
-                        hasValue: !selectedMake.isEmpty
-                    ) { showMakeSearch = true }
-                    .sheet(isPresented: $showMakeSearch) {
-                        CatalogSearchSheet(title: "Make", items: catalogService.makes.map(\.name)) { make in
-                            selectedMake = make
-                            selectedModel = ""
-                            manualModel = ""
-                            Task { await catalogService.loadModels(makeName: make, year: parsedYear) }
+                )
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        AppFieldGroup(label: "YEAR") {
+                            TextField("", text: $yearText, prompt: .appPrompt("e.g. 2023"))
+                                .keyboardType(.numberPad)
+                                .foregroundStyle(Color.textPrimary)
+                                .appFieldChrome()
                         }
-                    }
-                }
 
-                if selectedMake.isEmpty && !catalogService.makes.isEmpty {
-                    TextField("Model", text: $manualModel)
-                        .textFieldStyle(.roundedBorder)
-                } else if catalogService.isLoadingModels {
-                    ProgressView("Loading motorcycle models...")
-                } else if catalogService.models.isEmpty && !selectedMake.isEmpty {
-                    TextField("Model", text: $manualModel)
-                        .textFieldStyle(.roundedBorder)
-
-                    if let message = catalogService.modelsErrorMessage {
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                } else if !catalogService.models.isEmpty {
-                    CatalogPickerButton(
-                        title: "Model",
-                        selection: selectedModel.isEmpty ? "Select model" : selectedModel,
-                        hasValue: !selectedModel.isEmpty
-                    ) { showModelSearch = true }
-                    .sheet(isPresented: $showModelSearch) {
-                        CatalogSearchSheet(title: "Model", items: catalogService.models.map(\.name)) { model in
-                            selectedModel = model
-                        }
-                    }
-                }
-
-                Button {
-                    showPhotoSourceDialog = true
-                } label: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.secondary.opacity(0.12))
-                            .frame(height: 128)
-
-                        if let selectedPhoto {
-                            Image(uiImage: selectedPhoto)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(height: 128)
-                                .clipped()
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        } else {
-                            VStack(spacing: 6) {
-                                Image(systemName: "camera.fill")
-                                    .font(.system(size: 24, weight: .semibold))
-                                    .foregroundStyle(Color.appAccent)
-                                Text("Add Bike Photo")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                Text("Take or upload")
-                                    .font(.caption)
-                                    .foregroundStyle(Color(white: 0.45))
+                        AppFieldGroup(label: "MAKE") {
+                            if catalogService.isLoadingMakes && catalogService.makes.isEmpty {
+                                HStack(spacing: 10) {
+                                    ProgressView().tint(Color.appAccent).scaleEffect(0.85)
+                                    Text("Loading motorcycle makes…")
+                                        .foregroundStyle(Color.textSecondary)
+                                }
+                                .appFieldChrome()
+                            } else if catalogService.makes.isEmpty {
+                                TextField("", text: $manualMake, prompt: .appPrompt("Make"))
+                                    .foregroundStyle(Color.textPrimary)
+                                    .appFieldChrome()
+                                if let message = catalogService.makesErrorMessage {
+                                    Text(message)
+                                        .font(.caption)
+                                        .foregroundStyle(Color.textTertiary)
+                                }
+                            } else {
+                                CatalogPickerRow(
+                                    selection: selectedMake.isEmpty ? "Select make" : selectedMake,
+                                    hasValue: !selectedMake.isEmpty
+                                ) { showMakeSearch = true }
+                                .sheet(isPresented: $showMakeSearch) {
+                                    CatalogSearchSheet(title: "Make", items: catalogService.makes.map(\.name)) { make in
+                                        selectedMake = make
+                                        selectedModel = ""
+                                        manualModel = ""
+                                        Task { await catalogService.loadModels(makeName: make, year: parsedYear) }
+                                    }
+                                }
                             }
                         }
-                    }
-                }
-                .buttonStyle(.plain)
 
-                HStack {
-                    Button("Cancel") {
-                        onCancel()
-                    }
-                    .buttonStyle(.bordered)
+                        AppFieldGroup(label: "MODEL") {
+                            if selectedMake.isEmpty && !catalogService.makes.isEmpty {
+                                TextField("", text: $manualModel, prompt: .appPrompt("Model"))
+                                    .foregroundStyle(Color.textPrimary)
+                                    .appFieldChrome()
+                            } else if catalogService.isLoadingModels {
+                                HStack(spacing: 10) {
+                                    ProgressView().tint(Color.appAccent).scaleEffect(0.85)
+                                    Text("Loading motorcycle models…")
+                                        .foregroundStyle(Color.textSecondary)
+                                }
+                                .appFieldChrome()
+                            } else if catalogService.models.isEmpty && !selectedMake.isEmpty {
+                                TextField("", text: $manualModel, prompt: .appPrompt("Model"))
+                                    .foregroundStyle(Color.textPrimary)
+                                    .appFieldChrome()
+                                if let message = catalogService.modelsErrorMessage {
+                                    Text(message)
+                                        .font(.caption)
+                                        .foregroundStyle(Color.textTertiary)
+                                }
+                            } else if !catalogService.models.isEmpty {
+                                CatalogPickerRow(
+                                    selection: selectedModel.isEmpty ? "Select model" : selectedModel,
+                                    hasValue: !selectedModel.isEmpty
+                                ) { showModelSearch = true }
+                                .sheet(isPresented: $showModelSearch) {
+                                    CatalogSearchSheet(title: "Model", items: catalogService.models.map(\.name)) { model in
+                                        selectedModel = model
+                                    }
+                                }
+                            } else {
+                                TextField("", text: $manualModel, prompt: .appPrompt("Model"))
+                                    .foregroundStyle(Color.textPrimary)
+                                    .appFieldChrome()
+                            }
+                        }
 
-                    Spacer()
+                        AppFieldGroup(label: "BIKE PHOTO (OPTIONAL)") {
+                            Button {
+                                showPhotoSourceDialog = true
+                            } label: {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.appSurface2)
+                                        .frame(height: 160)
 
-                    Button("Save Bike") {
-                        onSave(nickname, parsedYear, resolvedMake, resolvedModel, selectedPhoto)
+                                    if let selectedPhoto {
+                                        Image(uiImage: selectedPhoto)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(height: 160)
+                                            .clipped()
+                                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    } else {
+                                        VStack(spacing: 6) {
+                                            Image(systemName: "camera.fill")
+                                                .font(.system(size: 24, weight: .semibold))
+                                                .foregroundStyle(Color.appAccent)
+                                            Text("Add Bike Photo")
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(Color.textPrimary)
+                                            Text("Take or upload")
+                                                .font(.caption)
+                                                .foregroundStyle(Color.textTertiary)
+                                        }
+                                    }
+                                }
+                                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(resolvedMake.isEmpty || resolvedModel.isEmpty)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 24)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
         }
-        .presentationDetents([.height(500)])
+        .presentationDetents([.large])
         .confirmationDialog("Bike Photo", isPresented: $showPhotoSourceDialog, titleVisibility: .visible) {
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
                 Button("Take Photo") {
@@ -511,7 +531,7 @@ private struct GarageBikeDetailScreen: View {
     let onSetPhoto: (UIImage) -> GarageStore.SetBikePhotoResult
     let onDelete: () -> GarageStore.DeleteBikeResult
 
-    @State private var nickname: String
+    @State private var nickname: String = ""
     @State private var yearText: String
     @State private var selectedMake: String
     @State private var selectedModel: String
@@ -543,7 +563,6 @@ private struct GarageBikeDetailScreen: View {
         self.onUpdate = onUpdate
         self.onSetPhoto = onSetPhoto
         self.onDelete = onDelete
-        _nickname = State(initialValue: bike.nickname)
         _yearText = State(initialValue: bike.year.map(String.init) ?? "")
         _selectedMake = State(initialValue: bike.make)
         _selectedModel = State(initialValue: bike.model)
@@ -565,20 +584,30 @@ private struct GarageBikeDetailScreen: View {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 28, weight: .semibold))
                                 .foregroundStyle(Color(white: 0.40))
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
 
                         Spacer()
 
-                        Button("Save") {
+                        Button {
                             switch onUpdate(nickname, parsedYear, resolvedMake, resolvedModel) {
                             case .success:
                                 onClose()
                             case .notFound, .writeFailed:
                                 showSaveFailedAlert = true
                             }
+                        } label: {
+                            Text("Save")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(resolvedMake.isEmpty || resolvedModel.isEmpty ? Color.textGhost : Color.appAccent)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
                         }
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.appAccent)
+                        .buttonStyle(.plain)
                         .disabled(resolvedMake.isEmpty || resolvedModel.isEmpty)
                     }
 
@@ -586,9 +615,6 @@ private struct GarageBikeDetailScreen: View {
                         Text("Edit Bike")
                             .font(.title2.weight(.semibold))
                             .foregroundStyle(.white)
-
-                        TextField("Nickname (optional)", text: $nickname)
-                            .textFieldStyle(.roundedBorder)
 
                         TextField("Year (optional)", text: $yearText)
                             .textFieldStyle(.roundedBorder)
@@ -814,6 +840,28 @@ private struct GarageBikeDetailScreen: View {
                 .foregroundStyle(Color.textGhost)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+private struct CatalogPickerRow: View {
+    let selection: String
+    let hasValue: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(selection)
+                    .foregroundStyle(hasValue ? Color.textPrimary : Color.textGhost)
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+            }
+            .appFieldChrome()
+        }
+        .buttonStyle(.plain)
     }
 }
 

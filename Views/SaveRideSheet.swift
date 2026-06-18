@@ -28,138 +28,118 @@ struct SaveRideSheet: View {
     @State private var photoPickerSource: PhotoPickerSource?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Save Ride")
-                    .font(.headline)
-                    .padding(.top, 4)
+        ZStack {
+            Color.appBg.ignoresSafeArea()
 
-                // Name
-                TextField("Ride name (optional)", text: $name)
-                    .textFieldStyle(.roundedBorder)
+            VStack(spacing: 0) {
+                AppSheetHeader(
+                    title: "Save Ride",
+                    onCancel: onCancel,
+                    saveLabel: "Save Ride",
+                    onSave: onSave
+                )
 
-                // Ride type
-                Picker("Ride Type", selection: $selectedRideType) {
-                    ForEach(RideType.allCases, id: \.self) { type in
-                        Label(type.displayName, systemImage: type.iconName).tag(type)
-                    }
-                }
-                .pickerStyle(.segmented)
-
-                if selectedRideType == .track {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.orange)
-                        Text("Track mode is not a lap timer or official timing device.")
-                            .font(.caption)
-                            .foregroundStyle(Color.textSecondary)
-                    }
-                }
-
-                // Bike
-                Menu {
-                    Button("No bike") { selectedBikeID = nil }
-                    ForEach(bikes) { bike in
-                        Button(bike.title) { selectedBikeID = bike.id }
-                    }
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Bike Used")
-                                .font(.caption)
-                                .foregroundStyle(Color.textSecondary)
-                            Text(selectedBikeLabel)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        AppFieldGroup(label: "NAME (OPTIONAL)") {
+                            TextField("", text: $name, prompt: .appPrompt("Untitled ride"))
                                 .foregroundStyle(Color.textPrimary)
-                                .lineLimit(1)
+                                .appFieldChrome()
                         }
-                        Spacer()
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Color.textSecondary)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(Color.appSurface2)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
 
-                // Storage mode
-                Picker("Storage", selection: $selectedStorageMode) {
-                    Text("Phone Only").tag(StorageMode.localOnly)
-                    Text("Cloud Summary").tag(StorageMode.cloudSummaryOnly)
-                    Text("Cloud Full Data").tag(StorageMode.cloudFull)
-                }
-                .pickerStyle(.menu)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                // Notes
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Notes (optional)")
-                        .font(.caption)
-                        .foregroundStyle(Color.textSecondary)
-                    TextField("Anything to note about this ride…", text: $notes, axis: .vertical)
-                        .lineLimit(3, reservesSpace: true)
-                        .textFieldStyle(.roundedBorder)
-                }
-
-                // Tags
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Tags (comma separated)")
-                        .font(.caption)
-                        .foregroundStyle(Color.textSecondary)
-                    TextField("canyon, commute, twisties…", text: $tagsText)
-                        .textFieldStyle(.roundedBorder)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .onChange(of: tagsText) { _, val in
-                            tags = val
-                                .split(separator: ",")
-                                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-                                .filter { !$0.isEmpty }
-                        }
-                }
-
-                // Photo
-                Button { showPhotoSourceDialog = true } label: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.secondary.opacity(0.12))
-                            .frame(height: 100)
-                        if let selectedImage {
-                            Image(uiImage: selectedImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(height: 100)
-                                .clipped()
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        } else {
-                            VStack(spacing: 6) {
-                                Image(systemName: "camera.fill")
-                                    .font(.system(size: 22, weight: .semibold))
-                                    .foregroundStyle(Color.appAccent)
-                                Text("Add Ride Photo (optional)")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.white)
+                        AppFieldGroup(label: "BIKE USED") {
+                            Menu {
+                                Button("No bike") { selectedBikeID = nil }
+                                ForEach(bikes) { bike in
+                                    Button(bike.title) { selectedBikeID = bike.id }
+                                }
+                            } label: {
+                                HStack {
+                                    Text(selectedBikeLabel)
+                                        .foregroundStyle(Color.textPrimary)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(Color.textSecondary)
+                                }
+                                .appFieldChrome()
                             }
                         }
-                    }
-                }
-                .buttonStyle(.plain)
 
-                HStack {
-                    Button("Cancel") { onCancel() }
-                        .buttonStyle(.bordered)
-                    Spacer()
-                    Button("Save Ride") { onSave() }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color.appAccent)
+                        AppFieldGroup(label: "STORAGE") {
+                            Menu {
+                                Button("Phone Only") { selectedStorageMode = .localOnly }
+                                Button("Cloud Summary") { selectedStorageMode = .cloudSummaryOnly }
+                                Button("Cloud Full Data") { selectedStorageMode = .cloudFull }
+                            } label: {
+                                HStack {
+                                    Text(storageModeLabel)
+                                        .foregroundStyle(Color.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(Color.textSecondary)
+                                }
+                                .appFieldChrome()
+                            }
+                        }
+
+                        AppFieldGroup(label: "NOTES (OPTIONAL)") {
+                            TextField("", text: $notes, prompt: .appPrompt("Anything to note about this ride…"), axis: .vertical)
+                                .lineLimit(3, reservesSpace: true)
+                                .foregroundStyle(Color.textPrimary)
+                                .appFieldChrome()
+                        }
+
+                        AppFieldGroup(label: "TAGS (COMMA SEPARATED)") {
+                            TextField("", text: $tagsText, prompt: .appPrompt("canyon, commute, twisties…"))
+                                .foregroundStyle(Color.textPrimary)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                                .onChange(of: tagsText) { _, val in
+                                    tags = val
+                                        .split(separator: ",")
+                                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                                        .filter { !$0.isEmpty }
+                                }
+                                .appFieldChrome()
+                        }
+
+                        AppFieldGroup(label: "RIDE PHOTO (OPTIONAL)") {
+                            Button { showPhotoSourceDialog = true } label: {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.appSurface2)
+                                        .frame(height: 110)
+                                    if let selectedImage {
+                                        Image(uiImage: selectedImage)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(height: 110)
+                                            .clipped()
+                                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    } else {
+                                        VStack(spacing: 6) {
+                                            Image(systemName: "camera.fill")
+                                                .font(.system(size: 22, weight: .semibold))
+                                                .foregroundStyle(Color.appAccent)
+                                            Text("Add Ride Photo")
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(Color.textPrimary)
+                                        }
+                                    }
+                                }
+                                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 24)
                 }
-                .padding(.top, 4)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 16)
         }
         .confirmationDialog("Ride Photo", isPresented: $showPhotoSourceDialog, titleVisibility: .visible) {
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
@@ -174,6 +154,10 @@ struct SaveRideSheet: View {
             }
             .ignoresSafeArea()
         }
+    }
+
+    private var storageModeLabel: String {
+        selectedStorageMode.displayName
     }
 
     private var selectedBikeLabel: String {
