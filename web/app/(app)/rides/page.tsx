@@ -5,12 +5,11 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { RideSummaryRow, BikeRow } from "@/lib/types";
 import { mpsToMph, metersToMiles, secToDisplay } from "@/lib/types";
+import { LocalDate } from "@/components/LocalDate";
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-  });
-}
+const RIDE_LIST_DATE_OPTS: Intl.DateTimeFormatOptions = {
+  month: "short", day: "numeric", year: "numeric",
+};
 
 export default async function RidesPage() {
   const supabase = await createClient();
@@ -62,7 +61,7 @@ export default async function RidesPage() {
                     )}
                   </div>
                   <p className="text-sm text-[var(--text-secondary)]">
-                    {ride.started_at ? formatDate(ride.started_at) : "—"}
+                    {ride.started_at ? <LocalDate iso={ride.started_at} options={RIDE_LIST_DATE_OPTS} /> : "—"}
                     {ride.bike_id && bikeMap[ride.bike_id] && ` · ${bikeMap[ride.bike_id]}`}
                     {ride.tags && ride.tags.length > 0 && ` · ${ride.tags.slice(0, 3).join(", ")}`}
                   </p>

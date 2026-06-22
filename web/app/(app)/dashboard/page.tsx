@@ -6,10 +6,11 @@ import Link from "next/link";
 import StatCard from "@/components/ui/StatCard";
 import type { RideSummaryRow, BikeRow } from "@/lib/types";
 import { mpsToMph, metersToMiles, secToDisplay } from "@/lib/types";
+import { LocalDate } from "@/components/LocalDate";
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
+const DASHBOARD_DATE_OPTS: Intl.DateTimeFormatOptions = {
+  month: "short", day: "numeric", year: "numeric",
+};
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -67,7 +68,7 @@ export default async function DashboardPage() {
                         {ride.name ?? "Unnamed Ride"}
                       </p>
                       <p className="text-sm text-[var(--text-secondary)]">
-                        {ride.started_at ? formatDate(ride.started_at) : "—"} · {metersToMiles(ride.distance_meters).toFixed(1)} mi · {secToDisplay(ride.duration_seconds)}
+                        {ride.started_at ? <LocalDate iso={ride.started_at} options={DASHBOARD_DATE_OPTS} /> : "—"} · {metersToMiles(ride.distance_meters).toFixed(1)} mi · {secToDisplay(ride.duration_seconds)}
                       </p>
                     </div>
                     <div className="text-right flex-shrink-0">

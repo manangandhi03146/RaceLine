@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
+import { LocalDate } from "@/components/LocalDate";
 import Link from "next/link";
 import type { RideSummaryRow, BikeRow } from "@/lib/types";
 import { mpsToMph, metersToMiles, metersToFeet } from "@/lib/types";
@@ -13,13 +14,6 @@ function formatDuration(sec: number): string {
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    weekday: "short", month: "long", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit",
-  });
 }
 
 interface StatRowProps { label: string; value: string }
@@ -69,7 +63,7 @@ export default async function RideDetailPage({ params }: { params: Promise<{ id:
             {ride.name ?? "Unnamed Ride"}
           </h1>
           <p className="text-[var(--text-secondary)]">
-            {ride.started_at ? formatDate(ride.started_at) : "—"}
+            {ride.started_at ? <LocalDate iso={ride.started_at} /> : "—"}
           </p>
           {bike && (
             <p className="mt-0.5 text-sm text-[var(--accent)]/80">
