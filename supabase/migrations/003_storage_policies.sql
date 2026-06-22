@@ -1,5 +1,5 @@
 -- ============================================================
--- Tread — Migration 003: Storage Bucket Policies
+-- RaceLine — Migration 003: Storage Bucket Policies
 -- Run AFTER 001_schema.sql
 --
 -- PREREQUISITES: Create these private buckets in Supabase Dashboard first:

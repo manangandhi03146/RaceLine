@@ -1,5 +1,5 @@
 -- ============================================================
--- Tread — Migration 002: Row Level Security Policies
+-- RaceLine — Migration 002: Row Level Security Policies
 -- Run AFTER 001_schema.sql
 -- ============================================================
 

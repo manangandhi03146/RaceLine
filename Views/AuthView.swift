@@ -24,11 +24,11 @@ struct AuthView: View {
                     }
 
                     VStack(spacing: 6) {
-                        Text("Tread")
+                        Text("RaceLine")
                             .font(.system(size: 36, weight: .bold, design: .rounded))
                             .foregroundStyle(Color.textPrimary)
 
-                        Text("Privacy-first ride tracking.")
+                        Text("Telemetry for every ride.")
                             .font(.subheadline)
                             .foregroundStyle(Color.textSecondary)
                     }

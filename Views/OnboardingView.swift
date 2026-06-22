@@ -26,7 +26,7 @@ struct OnboardingView: View {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 44, weight: .semibold))
                         .foregroundStyle(Color.appAccent)
-                    Text("Welcome to Tread")
+                    Text("Welcome to RaceLine")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                         .foregroundStyle(Color.textPrimary)
                     Text("Two quick things, then you're riding.")

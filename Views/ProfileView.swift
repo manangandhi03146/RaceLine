@@ -278,7 +278,7 @@ struct PrivacyPolicySheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Group {
-                        Text("Tread Privacy Policy")
+                        Text("RaceLine Privacy Policy")
                             .font(.title2.weight(.bold))
                             .foregroundStyle(Color.textPrimary)
 
@@ -287,13 +287,13 @@ struct PrivacyPolicySheet: View {
                             .foregroundStyle(Color.textTertiary)
 
                         privacySection("What we collect", """
-Tread collects only the data you choose to provide: your email address (for account creation), ride stats, and optionally GPS route data if you enable full cloud sync.
+RaceLine collects only the data you choose to provide: your email address (for account creation), ride stats, and optionally GPS route data if you enable full cloud sync.
 
 By default, GPS routes are stored locally on your device only. Cloud sync uploads summary statistics (speed, distance, lean angles) without your exact GPS route unless you explicitly enable full route sync.
 """)
 
-                        privacySection("Local-only mode", """
-You can use Tread without creating an account. In local-only mode, all data stays on your device and is never transmitted to any server.
+                        privacySection("Your account", """
+RaceLine requires an account so your rides sync across the iOS app and the web dashboard. We only store what you explicitly opt to upload — ride summaries by default, full GPS routes only if you turn them on.
 """)
 
                         privacySection("Cloud sync", """
@@ -305,11 +305,11 @@ You can delete your account and all associated data at any time from Profile →
 """)
 
                         privacySection("Third parties", """
-Tread does not sell or share your data with third parties. We use Supabase for database and authentication services.
+RaceLine does not sell or share your data with third parties. We use Supabase for database and authentication services, and Apple/Google for sign-in.
 """)
 
                         privacySection("Contact", """
-For privacy questions, contact us at: privacy@YOUR_DOMAIN.com
+For privacy questions, contact us at: privacy@raceline.app
 """)
                     }
                     .padding(.horizontal)

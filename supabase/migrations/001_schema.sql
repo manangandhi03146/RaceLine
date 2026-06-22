@@ -1,5 +1,5 @@
 -- ============================================================
--- Tread — Schema Migration 001: Core Tables
+-- RaceLine — Schema Migration 001: Core Tables
 -- Run this in Supabase Dashboard → SQL Editor
 -- ============================================================
 

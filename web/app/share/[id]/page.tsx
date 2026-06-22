@@ -88,7 +88,7 @@ export default async function SharePage({ params }: { params: Promise<{ id: stri
 
         {/* Footer */}
         <div className="border-t border-[var(--divider)] px-5 py-4 flex items-center justify-between">
-          <span className="text-xs text-[var(--text-ghost)]">Shared via Tread</span>
+          <span className="text-xs text-[var(--text-ghost)]">Shared via RaceLine</span>
           <Link href="/" className="text-xs font-semibold text-[var(--accent)] hover:underline">
             Get the app →
           </Link>

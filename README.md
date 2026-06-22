@@ -1,14 +1,14 @@
-# Tread
+# RaceLine
 
 **Privacy-first motorcycle ride analytics for iOS, with a companion web dashboard.**
 
-Tread is a motorcycle ride tracking app that lets you record rides with GPS and motion data, manage your garage, track maintenance, generate share cards, and view analytics on the web — all while keeping your sensitive route data private by default.
+RaceLine is a motorcycle ride tracking app that lets you record rides with GPS and motion data, manage your garage, track maintenance, generate share cards, and view analytics on the web — all while keeping your sensitive route data private by default.
 
 ---
 
 ## Why I Built This
 
-I wanted a ride tracker that actually respects privacy. Most apps upload your entire GPS route to their servers without asking. Tread defaults to cloud summary only — your exact route stays on your phone unless you explicitly choose to share it. Built as a portfolio project to demonstrate full-stack iOS + web development with thoughtful product design.
+I wanted a ride tracker that actually respects privacy. Most apps upload your entire GPS route to their servers without asking. RaceLine defaults to cloud summary only — your exact route stays on your phone unless you explicitly choose to share it. Built as a portfolio project to demonstrate full-stack iOS + web development with thoughtful product design.
 
 ---
 
@@ -53,8 +53,8 @@ I wanted a ride tracker that actually respects privacy. Most apps upload your en
 ## Architecture
 
 ```
-tread/
-├── MotorcycleTrackShare/       iOS app (Xcode project)
+raceline/
+├── MotorcycleTrackShare/       iOS app (Xcode project; internal target name kept for build stability)
 │   ├── Models/                 Data models
 │   ├── Services/               Business logic, storage, sync
 │   └── Views/                  SwiftUI views
@@ -148,13 +148,12 @@ See [`docs/PRIVACY_SECURITY.md`](docs/PRIVACY_SECURITY.md) for full details.
 
 ## Possible Domains
 
-- `ridetread.app`
-- `gettread.app`
-- `treadrides.com`
-- `treadmoto.com`
-- `treadtracker.app`
-- `trytread.app`
-- `treadgarage.com`
+- `raceline.app`
+- `getraceline.com`
+- `racelineapp.com`
+- `ridetheline.app`
+- `apexline.app`
+- `findyourline.app`
 
 ---
 
@@ -168,7 +167,7 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md) for planned features.
 
 > Copy-paste ready for portfolio/resume use:
 
-- Built **Tread**, a privacy-first iOS motorcycle tracking app in SwiftUI with CoreLocation/CoreMotion sensor fusion, offline-first ride recording, and configurable cloud sync via Supabase
+- Built **RaceLine**, a privacy-first iOS motorcycle tracking app in SwiftUI with CoreLocation/CoreMotion sensor fusion, offline-first ride recording, and configurable cloud sync via Supabase
 - Designed and implemented an offline-first sync architecture with a pending-upload queue, retry logic, and per-ride storage mode selection (local, summary-only, or full GPS telemetry)
 - Built a companion Next.js + TypeScript web dashboard with Supabase Auth, real-time ride analytics (Recharts), interactive route maps (Leaflet/OpenStreetMap), and server-side RLS enforcement
 - Implemented end-to-end privacy architecture: private storage buckets, signed URLs, route-trimming for share cards, and configurable GPS data exposure

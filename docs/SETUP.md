@@ -1,4 +1,4 @@
-# Tread — Setup Guide
+# RaceLine — Setup Guide
 
 This guide covers everything needed to run the iOS app, web dashboard, and Supabase backend from scratch.
 
@@ -150,7 +150,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ```bash
 git add .
-git commit -m "feat: initial Tread setup"
+git commit -m "feat: initial RaceLine setup"
 git push origin main
 ```
 

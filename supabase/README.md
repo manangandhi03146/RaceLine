@@ -1,6 +1,6 @@
-# Tread — Supabase Setup
+# RaceLine — Supabase Setup
 
-This directory contains all database migrations, RLS policies, storage policies, and Edge Functions for the Tread backend.
+This directory contains all database migrations, RLS policies, storage policies, and Edge Functions for the RaceLine backend.
 
 ---
 

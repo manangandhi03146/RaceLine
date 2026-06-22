@@ -71,7 +71,7 @@ export default async function MaintenancePage() {
           <div className="mb-3 text-4xl">🔧</div>
           <p className="text-lg font-semibold text-[var(--text-primary)]">No maintenance records</p>
           <p className="mt-1 text-[var(--text-secondary)]">
-            Log service records in the Tread iOS app to track your bike's health.
+            Log service records in the RaceLine iOS app to track your bike's health.
           </p>
         </div>
       ) : (

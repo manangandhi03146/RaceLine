@@ -3,29 +3,29 @@ import Link from "next/link";
 const sections = [
   {
     title: "What we collect",
-    body: `Tread collects only the data you choose to provide: your email address (for account creation), ride stats, and optionally GPS route data if you enable full cloud sync.
+    body: `RaceLine collects only the data you choose to provide: your Apple ID or Google email (for account creation), ride stats, and optionally GPS route data if you enable full cloud sync.
 
-By default, GPS routes are stored locally on your device only. Cloud sync uploads summary statistics (speed, distance, lean angles) without your exact GPS route unless you explicitly enable full route sync.`,
+By default, ride summaries (speed, distance, lean angles, duration) sync to the cloud. Your exact GPS route stays on your device unless you explicitly enable full-route sync.`,
   },
   {
-    title: "Local-only mode",
-    body: `You can use Tread without creating an account. In local-only mode, all data stays on your device and is never transmitted to any server.`,
+    title: "Your account",
+    body: `RaceLine requires an account so your rides sync across the iOS app and the web dashboard. We use Sign in with Apple and Sign in with Google — we never see your password.`,
   },
   {
     title: "Cloud sync",
-    body: `If you enable cloud sync, ride summaries are stored in a private Supabase database. Only you can access your data. Full GPS route data is only uploaded if you choose "Cloud Full Data" storage mode with an explicit privacy warning.`,
+    body: `Ride summaries are stored in a private Supabase database scoped to your user ID via row-level security. Only you can read your own data. Full GPS route data is only uploaded if you choose "Cloud Full Data" storage mode with an explicit privacy warning.`,
   },
   {
     title: "Data deletion",
-    body: `You can delete your account and all associated data at any time from Profile → Delete Account. This permanently removes all rides, bikes, and media from our servers.`,
+    body: `You can delete your account and all associated data at any time from Profile → Delete Account in the iOS app. This permanently removes all rides, bikes, photos, telemetry, and your account itself from our servers.`,
   },
   {
     title: "Third parties",
-    body: `Tread does not sell or share your data with third parties. We use Supabase for database and authentication services.`,
+    body: `RaceLine does not sell or share your data with third parties. We use Supabase for database and authentication, and Apple/Google for sign-in.`,
   },
   {
     title: "Contact",
-    body: `For privacy questions, contact us at: privacy@YOUR_DOMAIN.com`,
+    body: `For privacy questions, contact us at: privacy@raceline.app`,
   },
 ];
 
@@ -34,7 +34,7 @@ export default function PrivacyPage() {
     <div className="flex flex-col min-h-screen">
       <header className="border-b border-[var(--divider)] bg-[var(--surface)]">
         <div className="mx-auto flex max-w-4xl items-center gap-4 px-4 py-4">
-          <Link href="/" className="text-xl font-bold text-[var(--accent)] tracking-tight">Tread</Link>
+          <Link href="/" className="text-xl font-bold text-[var(--accent)] tracking-tight">RaceLine</Link>
         </div>
       </header>
 
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
       <footer className="border-t border-[var(--divider)] px-4 py-6">
         <div className="mx-auto max-w-4xl text-center">
           <Link href="/" className="text-sm text-[var(--text-ghost)] hover:text-[var(--text-secondary)]">
-            ← Back to Tread
+            ← Back to RaceLine
           </Link>
         </div>
       </footer>

@@ -1,4 +1,4 @@
-// Tread — Edge Function: delete-account
+// RaceLine — Edge Function: delete-account
 // Deletes all user data and the auth user record.
 // Called from iOS app and web dashboard after user confirms deletion.
 //

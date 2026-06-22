@@ -54,7 +54,7 @@ export default async function DashboardPage() {
           <div className="flex flex-col gap-2">
             {recentRides.length === 0 ? (
               <div className="rounded-xl bg-[var(--surface)] p-8 text-center text-[var(--text-secondary)]">
-                No rides synced yet. Record a ride in the Tread iOS app.
+                No rides synced yet. Record a ride in the RaceLine iOS app.
               </div>
             ) : (
               recentRides.map((ride) => (

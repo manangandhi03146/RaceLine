@@ -98,8 +98,8 @@ export default function AuthForm() {
           <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[var(--accent)]/15 text-4xl">
             🏍️
           </div>
-          <h1 className="text-3xl font-bold text-[var(--text-primary)]">Tread</h1>
-          <p className="mt-1 text-[var(--text-secondary)]">Privacy-first ride tracking</p>
+          <h1 className="text-3xl font-bold text-[var(--text-primary)]">RaceLine</h1>
+          <p className="mt-1 text-[var(--text-secondary)]">Telemetry for every ride</p>
         </div>
 
         <div className="rounded-2xl bg-[var(--surface)] p-6">

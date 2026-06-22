@@ -39,7 +39,7 @@ export default function LandingPage() {
       {/* Header */}
       <header className="border-b border-[var(--divider)] bg-[var(--surface)]">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <span className="text-xl font-bold text-[var(--accent)] tracking-tight">Tread</span>
+          <span className="text-xl font-bold text-[var(--accent)] tracking-tight">RaceLine</span>
           <div className="flex items-center gap-4">
             <Link href="/privacy" className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
               Privacy
@@ -60,11 +60,11 @@ export default function LandingPage() {
           🏍️
         </div>
         <h1 className="mb-4 text-5xl font-bold tracking-tight text-[var(--text-primary)] sm:text-6xl">
-          Ride more.<br />
-          <span className="text-[var(--accent)]">Track smarter.</span>
+          Find your line.<br />
+          <span className="text-[var(--accent)]">Every ride.</span>
         </h1>
         <p className="mb-8 max-w-xl text-lg text-[var(--text-secondary)]">
-          Privacy-first motorcycle ride tracking with lean angles, speed, maintenance logs, and optional cloud sync. Your data, your rules.
+          Motorcycle telemetry from the same phone you already carry. Speed, lean angle, GPS, elevation, and maintenance — synced cleanly between your iPhone and the web.
         </p>
         <div className="flex flex-col items-center gap-3 sm:flex-row">
           <Link
@@ -106,7 +106,7 @@ export default function LandingPage() {
             Privacy built in, not bolted on
           </h2>
           <p className="mb-6 text-[var(--text-secondary)]">
-            Use Tread without an account — rides stay on your phone forever. When you opt in to cloud sync, only summary stats (speed, distance, lean angles) are uploaded by default. Your GPS routes never leave your device unless you explicitly enable full route sync.
+            RaceLine syncs ride summaries — speed, distance, lean angles — by default. Your exact GPS route stays on your device unless you explicitly turn on full-route sync. Sign in with Apple or Google; no passwords for us to leak.
           </p>
           <Link href="/privacy" className="text-sm font-semibold text-[var(--accent)] hover:underline">
             Read the full privacy policy →
@@ -117,7 +117,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-[var(--divider)] px-4 py-8">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 sm:flex-row sm:justify-between">
-          <span className="text-sm font-bold text-[var(--accent)]">Tread</span>
+          <span className="text-sm font-bold text-[var(--accent)]">RaceLine</span>
           <div className="flex gap-6 text-sm text-[var(--text-ghost)]">
             <Link href="/privacy" className="hover:text-[var(--text-secondary)]">Privacy Policy</Link>
             <Link href="/auth" className="hover:text-[var(--text-secondary)]">Sign In</Link>

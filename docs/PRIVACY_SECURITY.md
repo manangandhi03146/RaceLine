@@ -1,6 +1,6 @@
-# Tread — Privacy & Security
+# RaceLine — Privacy & Security
 
-Tread is designed around the principle that **your GPS route data is sensitive and should stay private by default**.
+RaceLine is designed around the principle that **your GPS route data is sensitive and should stay private by default**.
 
 ---
 
@@ -81,7 +81,7 @@ Options: Off, 0.1 mi, 0.25 mi (default), 0.5 mi, 1.0 mi, custom
 > **Important:** Route trimming applies to previews only. The original raw local file is never permanently modified unless the user explicitly chooses a "trim before upload" option (future feature).
 
 ### GPS metadata in photos
-Photos taken with the iOS camera may contain GPS EXIF metadata. Tread strips EXIF GPS data from photos before uploading to Supabase. Photos stored locally retain their original metadata.
+Photos taken with the iOS camera may contain GPS EXIF metadata. RaceLine strips EXIF GPS data from photos before uploading to Supabase. Photos stored locally retain their original metadata.
 
 ---
 

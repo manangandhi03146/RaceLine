@@ -168,7 +168,7 @@ struct SettingsView: View {
                 HStack {
                     Text("App")
                     Spacer()
-                    Text("Tread")
+                    Text("RaceLine")
                         .foregroundStyle(.secondary)
                 }
                 HStack {

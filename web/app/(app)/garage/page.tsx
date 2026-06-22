@@ -95,7 +95,7 @@ export default async function GaragePage() {
           <div className="mb-3 text-4xl">🏍️</div>
           <p className="text-lg font-semibold text-[var(--text-primary)]">No bikes synced</p>
           <p className="mt-1 text-[var(--text-secondary)]">
-            Add bikes in the Tread iOS app and enable cloud sync.
+            Add bikes in the RaceLine iOS app and enable cloud sync.
           </p>
         </div>
       ) : (

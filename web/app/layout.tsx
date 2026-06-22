@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Tread — Privacy-First Ride Tracking",
-  description: "Track motorcycle rides with privacy-first cloud sync. Street mode, track mode, lean angles, speed, and more.",
+  title: "RaceLine — Motorcycle Telemetry",
+  description: "Record street and track rides with GPS, lean angle, speed, and elevation telemetry. Apple- and Google-secured sync between your iPhone and the web dashboard.",
 };
 
 export default function RootLayout({

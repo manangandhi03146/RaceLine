@@ -38,7 +38,7 @@ export default async function RidesPage() {
           <div className="mb-3 text-4xl">🛣️</div>
           <p className="text-lg font-semibold text-[var(--text-primary)]">No rides yet</p>
           <p className="mt-1 text-[var(--text-secondary)]">
-            Record rides in the Tread iOS app and enable cloud sync to see them here.
+            Record rides in the RaceLine iOS app and enable cloud sync to see them here.
           </p>
         </div>
       ) : (
