@@ -23,6 +23,7 @@
 		4FA6B3432F999A2300D807A0 /* GarageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA6B3412F999A2300D807A0 /* GarageStore.swift */; };
 		4FA6B3442F999A2300D807A0 /* MotorcycleCatalogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA6B3422F999A2300D807A0 /* MotorcycleCatalogService.swift */; };
 		4FA6B3462F999A2C00D807A0 /* GarageBike.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA6B3452F999A2C00D807A0 /* GarageBike.swift */; };
+		4FAB00012FAB00010012ABCD /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FAB00002FAB00010012ABCD /* ProfileView.swift */; };
 		4FD997632F351CC100B57C6A /* SaveRideSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FD997622F351CC100B57C6A /* SaveRideSheet.swift */; };
 		4FE936472FC5867C0027978B /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE936442FC5867C0027978B /* AuthView.swift */; };
 		4FE936482FC5867C0027978B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE936452FC5867C0027978B /* RootView.swift */; };
@@ -34,11 +35,16 @@
 		4FE936532FC586920027978B /* CloudGarageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE9364C2FC586920027978B /* CloudGarageStore.swift */; };
 		4FE936542FC586920027978B /* CloudStorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE9364E2FC586920027978B /* CloudStorageService.swift */; };
 		4FE936552FC586920027978B /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 4FE936562FC586920027978B /* Supabase */; };
-		4FAB00012FAB00010012ABCD /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FAB00002FAB00010012ABCD /* ProfileView.swift */; };
 		AA000001000000010000AAA1 /* MaintenanceRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAA0 /* MaintenanceRecord.swift */; };
 		AA000001000000010000AAA3 /* MaintenanceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAA2 /* MaintenanceStore.swift */; };
 		AA000001000000010000AAA5 /* SyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAA4 /* SyncService.swift */; };
 		AA000001000000010000AAA7 /* MaintenanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAA6 /* MaintenanceView.swift */; };
+		AA000001000000010000AAA9 /* AppleSignInCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAA8 /* AppleSignInCoordinator.swift */; };
+		AA000001000000010000AAAB /* AuthState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAAA /* AuthState.swift */; };
+		AA000001000000010000AAAD /* ProfileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAAC /* ProfileService.swift */; };
+		AA000001000000010000AAAF /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAAE /* UserProfile.swift */; };
+		AA000001000000010000AAB1 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAB0 /* OnboardingView.swift */; };
+		AA000001000000010000AAB3 /* OAuthLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAB2 /* OAuthLauncher.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -78,6 +84,7 @@
 		4FA6B3412F999A2300D807A0 /* GarageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarageStore.swift; sourceTree = "<group>"; };
 		4FA6B3422F999A2300D807A0 /* MotorcycleCatalogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotorcycleCatalogService.swift; sourceTree = "<group>"; };
 		4FA6B3452F999A2C00D807A0 /* GarageBike.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarageBike.swift; sourceTree = "<group>"; };
+		4FAB00002FAB00010012ABCD /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		4FD997622F351CC100B57C6A /* SaveRideSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveRideSheet.swift; sourceTree = "<group>"; };
 		4FE936432FC5867C0027978B /* AppComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppComponents.swift; sourceTree = "<group>"; };
 		4FE936442FC5867C0027978B /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
@@ -88,11 +95,16 @@
 		4FE9364D2FC586920027978B /* CloudRideStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudRideStore.swift; sourceTree = "<group>"; };
 		4FE9364E2FC586920027978B /* CloudStorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudStorageService.swift; sourceTree = "<group>"; };
 		4FE9364F2FC586920027978B /* SupabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseManager.swift; sourceTree = "<group>"; };
-		4FAB00002FAB00010012ABCD /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		AA000001000000010000AAA0 /* MaintenanceRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceRecord.swift; sourceTree = "<group>"; };
 		AA000001000000010000AAA2 /* MaintenanceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceStore.swift; sourceTree = "<group>"; };
 		AA000001000000010000AAA4 /* SyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncService.swift; sourceTree = "<group>"; };
 		AA000001000000010000AAA6 /* MaintenanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceView.swift; sourceTree = "<group>"; };
+		AA000001000000010000AAA8 /* AppleSignInCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInCoordinator.swift; sourceTree = "<group>"; };
+		AA000001000000010000AAAA /* AuthState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthState.swift; sourceTree = "<group>"; };
+		AA000001000000010000AAAC /* ProfileService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileService.swift; sourceTree = "<group>"; };
+		AA000001000000010000AAAE /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
+		AA000001000000010000AAB0 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		AA000001000000010000AAB2 /* OAuthLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthLauncher.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -184,6 +196,7 @@
 				4F50095E2F15F09D005C33B3 /* RideSummary.swift */,
 				4F50095D2F15F08A005C33B3 /* RideSample.swift */,
 				AA000001000000010000AAA0 /* MaintenanceRecord.swift */,
+				AA000001000000010000AAAE /* UserProfile.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -205,6 +218,10 @@
 				4F5009592F132C79005C33B3 /* LocationService.swift */,
 				AA000001000000010000AAA2 /* MaintenanceStore.swift */,
 				AA000001000000010000AAA4 /* SyncService.swift */,
+				AA000001000000010000AAA8 /* AppleSignInCoordinator.swift */,
+				AA000001000000010000AAAA /* AuthState.swift */,
+				AA000001000000010000AAAC /* ProfileService.swift */,
+				AA000001000000010000AAB2 /* OAuthLauncher.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -223,6 +240,7 @@
 				4F50095C2F15E0BB005C33B3 /* ContentView.swift */,
 				4FAB00002FAB00010012ABCD /* ProfileView.swift */,
 				AA000001000000010000AAA6 /* MaintenanceView.swift */,
+				AA000001000000010000AAB0 /* OnboardingView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -406,6 +424,12 @@
 				AA000001000000010000AAA3 /* MaintenanceStore.swift in Sources */,
 				AA000001000000010000AAA5 /* SyncService.swift in Sources */,
 				AA000001000000010000AAA7 /* MaintenanceView.swift in Sources */,
+				AA000001000000010000AAA9 /* AppleSignInCoordinator.swift in Sources */,
+				AA000001000000010000AAAB /* AuthState.swift in Sources */,
+				AA000001000000010000AAAD /* ProfileService.swift in Sources */,
+				AA000001000000010000AAAF /* UserProfile.swift in Sources */,
+				AA000001000000010000AAB1 /* OnboardingView.swift in Sources */,
+				AA000001000000010000AAB3 /* OAuthLauncher.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -565,6 +589,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = MotorcycleTrackShare/MotorcycleTrackShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3244DXH2Z8;
@@ -596,6 +621,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = MotorcycleTrackShare/MotorcycleTrackShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3244DXH2Z8;

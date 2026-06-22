@@ -4,12 +4,9 @@ struct ProfileView: View {
     @EnvironmentObject private var authService: AuthService
     @EnvironmentObject private var rideStore: RideStore
     @EnvironmentObject private var syncService: SyncService
-    @AppStorage("localOnlyMode") private var localOnlyMode: Bool = false
     @AppStorage("defaultStorageMode") private var defaultStorageModeRaw: String = StorageMode.localOnly.rawValue
 
     @State private var isLoggingOut = false
-    @State private var showLogoutError = false
-    @State private var showSignInPrompt = false
     @State private var showDeleteAccountConfirm = false
     @State private var isDeleting = false
     @State private var showDeleteError = false
@@ -17,6 +14,19 @@ struct ProfileView: View {
 
     private var defaultStorageMode: StorageMode {
         StorageMode(rawValue: defaultStorageModeRaw) ?? .localOnly
+    }
+
+    private var profile: UserProfile? { authService.state.profile }
+
+    private var identityHeadline: String {
+        if let name = profile?.displayName, !name.isEmpty { return name }
+        if let email = profile?.email, !email.isEmpty     { return email }
+        return "Signed in"
+    }
+
+    private var identitySubtitle: String? {
+        guard let name = profile?.displayName, !name.isEmpty else { return nil }
+        return profile?.email
     }
 
     // MARK: - All-time stats
@@ -53,41 +63,41 @@ struct ProfileView: View {
                         Circle()
                             .fill(Color.appSurface2)
                             .frame(width: 96, height: 96)
-                        Image(systemName: authService.isLoggedIn ? "person.fill" : "person")
+                        Image(systemName: "person.fill")
                             .font(.system(size: 42, weight: .medium))
-                            .foregroundStyle(authService.isLoggedIn ? Color.appAccent : Color.textGhost)
+                            .foregroundStyle(Color.appAccent)
                     }
                     .padding(.top, 32)
 
                     VStack(spacing: 6) {
-                        if authService.isLoggedIn {
-                            Text(authService.userEmail ?? "Signed in")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(Color.textPrimary)
-                            HStack(spacing: 6) {
-                                Image(systemName: "icloud.fill")
-                                    .font(.system(size: 12))
-                                Text("Cloud sync active")
-                                    .font(.subheadline)
-                            }
-                            .foregroundStyle(Color.appAccent)
+                        Text(identityHeadline)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(Color.textPrimary)
+                            .lineLimit(1)
 
-                            if let badge = syncBadge {
-                                Text(badge)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 4)
-                                    .background(Color.red)
-                                    .clipShape(Capsule())
-                            }
-                        } else {
-                            Text("Local Only")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(Color.textPrimary)
-                            Text("Rides stay private on this device")
+                        if let subtitle = identitySubtitle {
+                            Text(subtitle)
                                 .font(.subheadline)
                                 .foregroundStyle(Color.textSecondary)
+                                .lineLimit(1)
+                        }
+
+                        HStack(spacing: 6) {
+                            Image(systemName: "icloud.fill")
+                                .font(.system(size: 12))
+                            Text("Cloud sync active")
+                                .font(.subheadline)
+                        }
+                        .foregroundStyle(Color.appAccent)
+
+                        if let badge = syncBadge {
+                            Text(badge)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Color.red)
+                                .clipShape(Capsule())
                         }
                     }
                 }
@@ -131,47 +141,26 @@ struct ProfileView: View {
 
                 // Account actions
                 VStack(spacing: 10) {
-                    if authService.isLoggedIn {
-                        PrimaryButton(
-                            title: "Sign Out",
-                            isLoading: isLoggingOut,
-                            isDestructive: true
-                        ) {
-                            Task { await logOut() }
-                        }
-
-                        Button {
-                            showDeleteAccountConfirm = true
-                        } label: {
-                            Text("Delete Account")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.red)
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        PrimaryButton(title: "Sign In or Create Account") {
-                            showSignInPrompt = true
-                        }
+                    PrimaryButton(
+                        title: "Sign Out",
+                        isLoading: isLoggingOut,
+                        isDestructive: true
+                    ) {
+                        Task { await logOut() }
                     }
+
+                    Button {
+                        showDeleteAccountConfirm = true
+                    } label: {
+                        Text("Delete Account")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 24)
-
-                // Privacy footer for local-only
-                if !authService.isLoggedIn {
-                    HStack(spacing: 8) {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.textGhost)
-                        Text("Your rides stay private and local until you choose to sign in.")
-                            .font(.caption)
-                            .foregroundStyle(Color.textGhost)
-                    }
-                    .padding(.horizontal, 32)
-                    .padding(.top, 12)
-                    .multilineTextAlignment(.center)
-                }
 
                 // Privacy policy link
                 Button {
@@ -194,11 +183,6 @@ struct ProfileView: View {
         .safeAreaInset(edge: .top, spacing: 0) { profileHeader }
         .background(Color.appBg.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
-        .alert("Sign Out Failed", isPresented: $showLogoutError) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Please try again.")
-        }
         .confirmationDialog("Delete Account?",
                             isPresented: $showDeleteAccountConfirm,
                             titleVisibility: .visible) {
@@ -213,18 +197,6 @@ struct ProfileView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text("Could not delete your account. Please try again or contact support.")
-        }
-        .sheet(isPresented: $showSignInPrompt) {
-            NavigationStack {
-                AuthView()
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Cancel") { showSignInPrompt = false }
-                                .foregroundStyle(Color.appAccent)
-                        }
-                    }
-            }
         }
         .sheet(isPresented: $showPrivacyPolicy) {
             PrivacyPolicySheet()
@@ -259,12 +231,7 @@ struct ProfileView: View {
 
     private func logOut() async {
         isLoggingOut = true
-        do {
-            try await authService.signOut()
-            localOnlyMode = true
-        } catch {
-            showLogoutError = true
-        }
+        await authService.signOut()
         isLoggingOut = false
     }
 
@@ -294,7 +261,6 @@ struct ProfileView: View {
         isDeleting = true
         do {
             try await authService.deleteAccount()
-            localOnlyMode = true
         } catch {
             showDeleteError = true
         }
