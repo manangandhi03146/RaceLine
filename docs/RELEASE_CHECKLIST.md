@@ -180,9 +180,24 @@ Make a clean install, then walk through every flow:
 - [ ] Add Maintenance — type, optional title (only for Custom), date, mileage reminder, receipt photo, save
 - [ ] Edit Maintenance — changes persist
 
-### Sharing
-- [ ] Tap Share on a ride → ShareCardScreen with current ride preselected
-- [ ] Pick photo, customize colors, tap export → iOS share sheet says "RaceLine"
+### Sharing a ride card
+- [ ] Open any saved ride from the Rides list
+- [ ] Tap the **Share** capsule at the top right of the ride detail screen
+- [ ] ShareCardScreen opens with that ride preselected
+- [ ] Tap **Background Photo** → pick a photo from your library (a ride/bike/scenery shot)
+- [ ] In Customize:
+  - [ ] Edit the **Title** field — preview updates live
+  - [ ] Tap **Text color** → pick a color → text on the card recolors
+  - [ ] Tap **Route color** → pick a color → the GPS route polyline recolors
+  - [ ] Toggle **Photo fit** between Fit and Fill → preview reflows
+- [ ] Once the preview looks right, tap the **Share icon** in the top-right toolbar
+- [ ] iOS share sheet appears with the rendered 1080×1920 PNG and the source app reads **"RaceLine"** (not MotorcycleTrackShare)
+- [ ] Pick a destination (Messages, Instagram Stories, Photos, AirDrop) → the card sends/saves
+- [ ] Card footer reads **"RaceLine"** in the bottom-left
+
+If you're sharing the current in-progress ride before saving it:
+- [ ] Recording must be stopped
+- [ ] At the top of the Select Ride menu (when accessed from the standalone Share tab) it shows "Current Ride (unsaved)" with a "Save Ride to Library" button — note: this entry point is currently hidden when entering Share from the ride detail screen, which always shares the ride you came in on
 
 ### Account
 - [ ] Profile shows display name / email / sync badge

@@ -151,7 +151,7 @@ struct ShareCardView: View {
                                 .frame(width: rightColumnWidth, alignment: .trailing)
                         }
 
-                        Text("MotorcycleTrackShare")
+                        Text("RaceLine")
                             .font(.system(size: brandSize, weight: .semibold, design: .default))
                             .opacity(0.85)
                             .padding(.top, 2)
