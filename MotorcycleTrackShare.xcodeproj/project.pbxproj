@@ -593,6 +593,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MotorcycleTrackShare/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RaceLine;
+				INFOPLIST_KEY_CFBundleName = RaceLine;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Used to record your ride route and speed";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Used to record lean angle and motion during rides";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -626,6 +627,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MotorcycleTrackShare/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RaceLine;
+				INFOPLIST_KEY_CFBundleName = RaceLine;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Used to record your ride route and speed";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Used to record lean angle and motion during rides";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
