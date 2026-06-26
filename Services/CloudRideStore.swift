@@ -8,6 +8,10 @@ struct CloudRideStore {
 
     // MARK: - Upsert ride + optional photo
 
+    /// Uploads the canonical ride row, then *best-effort* uploads the photo.
+    /// A failed photo upload is logged but doesn't throw — the row is the
+    /// authoritative sync event, and we don't want a transient storage hiccup
+    /// to mark a fully-synced ride as failed.
     func syncRide(_ ride: SavedRide, userID: UUID, photo: UIImage? = nil) async throws -> UUID {
         let payload = RideUpsertPayload(ride: ride, userID: userID)
 
@@ -22,7 +26,11 @@ struct CloudRideStore {
 
         if let photo {
             let path = photoStoragePath(userID: userID, rideID: ride.id)
-            try await storage.uploadPhoto(photo, path: path, bucket: "ride-photos")
+            do {
+                try await storage.uploadPhoto(photo, path: path, bucket: "ride-photos")
+            } catch {
+                print("CloudRideStore: photo upload failed for ride \(ride.id), keeping row as synced: \(error)")
+            }
         }
 
         return returned.id

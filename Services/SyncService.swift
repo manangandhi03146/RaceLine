@@ -113,15 +113,21 @@ final class SyncService: ObservableObject {
 
         do {
             let cloudStore = CloudRideStore()
+            // Canonical sync = the row upsert. If this succeeds the ride is
+            // considered synced; photo/telemetry are best-effort follow-ups.
             let remoteID = try await cloudStore.syncRide(ride, userID: userID, photo: photo)
 
-            // Upload full telemetry if the storage mode requires it
             var telemetryPath: String? = nil
             if ride.effectiveStorageMode.uploadsFullTelemetry,
                let telemetryURL = store.telemetryURL(for: ride) {
                 let path = cloudStore.telemetryStoragePath(userID: userID, rideID: ride.id)
-                try await cloudStore.uploadTelemetry(fileURL: telemetryURL, path: path)
-                telemetryPath = path
+                do {
+                    try await cloudStore.uploadTelemetry(fileURL: telemetryURL, path: path)
+                    telemetryPath = path
+                } catch {
+                    // Don't mark the ride as failed — the summary row is in the cloud.
+                    print("SyncService: telemetry upload failed for ride \(ride.id): \(error)")
+                }
             }
 
             let photoPath = photo != nil ? cloudStore.photoStoragePath(userID: userID, rideID: ride.id) : nil
