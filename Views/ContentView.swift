@@ -665,11 +665,29 @@ struct ContentView: View {
 
     private var bottomNavigationBar: some View {
         HStack(spacing: 0) {
-            navBarButton(title: "Service",     systemImage: "wrench.and.screwdriver",  tab: .maintenance)
-            navBarButton(title: "Garage",      systemImage: "motorcycle",              tab: .garage)
-            navBarButton(title: "Ride",        systemImage: "speedometer",             tab: .ride)
-            navBarButton(title: "Rides",       systemImage: "calendar",               tab: .calendar)
-            navBarButton(title: "Profile",     systemImage: "person.fill",             tab: .profile)
+            navBarButton(title: "Service", tab: .maintenance) { isActive in
+                Image(systemName: "wrench.and.screwdriver")
+                    .font(.system(size: 20, weight: isActive ? .semibold : .regular))
+                    .frame(height: 22)
+            }
+            navBarButton(title: "Garage", tab: .garage) { _ in
+                SportbikeIcon(height: 18).frame(height: 22)
+            }
+            navBarButton(title: "Ride", tab: .ride) { isActive in
+                Image(systemName: "speedometer")
+                    .font(.system(size: 20, weight: isActive ? .semibold : .regular))
+                    .frame(height: 22)
+            }
+            navBarButton(title: "Rides", tab: .calendar) { isActive in
+                Image(systemName: "calendar")
+                    .font(.system(size: 20, weight: isActive ? .semibold : .regular))
+                    .frame(height: 22)
+            }
+            navBarButton(title: "Profile", tab: .profile) { isActive in
+                Image(systemName: "person.fill")
+                    .font(.system(size: 20, weight: isActive ? .semibold : .regular))
+                    .frame(height: 22)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 10)
@@ -680,13 +698,14 @@ struct ContentView: View {
         }
     }
 
-    private func navBarButton(title: String, systemImage: String, tab: Tab) -> some View {
+    @ViewBuilder
+    private func navBarButton<Icon: View>(title: String,
+                                          tab: Tab,
+                                          @ViewBuilder icon: @escaping (Bool) -> Icon) -> some View {
         let isActive = selectedTab == tab
-        return Button { selectedTab = tab } label: {
+        Button { selectedTab = tab } label: {
             VStack(spacing: 3) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 20, weight: isActive ? .semibold : .regular))
-                    .frame(height: 22)
+                icon(isActive)
                 Text(title)
                     .font(.system(size: 9, weight: isActive ? .semibold : .regular))
             }

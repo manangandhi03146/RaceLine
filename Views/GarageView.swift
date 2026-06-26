@@ -26,8 +26,7 @@ struct GarageView: View {
                 if garageStore.bikes.isEmpty {
                     VStack(spacing: 20) {
                         VStack(spacing: 12) {
-                            Image(systemName: "motorcycle")
-                                .font(.system(size: 44, weight: .semibold))
+                            SportbikeIcon(height: 48)
                                 .foregroundStyle(Color.appAccent)
                             Text("No bikes yet")
                                 .font(.title3.weight(.semibold))
@@ -258,8 +257,7 @@ struct GarageView: View {
                 .fill(Color.appSurface2)
                 .frame(width: 96, height: 96)
                 .overlay {
-                    Image(systemName: "motorcycle")
-                        .font(.system(size: 28, weight: .semibold))
+                    SportbikeIcon(height: 32)
                         .foregroundStyle(Color.appAccent)
                 }
         }

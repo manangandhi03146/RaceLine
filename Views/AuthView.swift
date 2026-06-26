@@ -18,8 +18,7 @@ struct AuthView: View {
                         Circle()
                             .fill(Color.appAccent.opacity(0.15))
                             .frame(width: 104, height: 104)
-                        Image(systemName: "motorcycle")
-                            .font(.system(size: 46, weight: .semibold))
+                        SportbikeIcon(height: 50)
                             .foregroundStyle(Color.appAccent)
                     }
 

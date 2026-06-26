@@ -116,6 +116,25 @@ struct LoadingView: View {
     }
 }
 
+// MARK: - SportbikeIcon
+
+/// Custom motorcycle glyph that replaces SF Symbols' generic `motorcycle`
+/// (which reads cruiser/standard). Wraps the `Sportbike` asset, applies
+/// template rendering (so it tints with `.foregroundStyle`), and sizes
+/// to the requested *height* while preserving aspect ratio — drop-in
+/// equivalent to setting `.font(.system(size:))` on an SF Symbol.
+struct SportbikeIcon: View {
+    let height: CGFloat
+
+    var body: some View {
+        Image("Sportbike")
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(height: height)
+    }
+}
+
 // MARK: - MinimalCard modifier
 
 struct MinimalCard: ViewModifier {

@@ -17,7 +17,7 @@ struct IntroTutorialView: View {
 
     private static let pages: [IntroPage] = [
         IntroPage(
-            icon: "motorcycle",
+            icon: "__sportbike__",
             title: "Welcome to RaceLine",
             body: "Turn your phone into a motorcycle telemetry rig. Record street rides and track days, then analyze speed, lean angle, GPS, and more.",
             actionLabel: nil
@@ -188,9 +188,14 @@ private struct IntroPageView: View {
                 Circle()
                     .fill(Color.appAccent.opacity(0.15))
                     .frame(width: 140, height: 140)
-                Image(systemName: page.icon)
-                    .font(.system(size: 64, weight: .semibold))
-                    .foregroundStyle(Color.appAccent)
+                if page.icon == "__sportbike__" {
+                    SportbikeIcon(height: 72)
+                        .foregroundStyle(Color.appAccent)
+                } else {
+                    Image(systemName: page.icon)
+                        .font(.system(size: 64, weight: .semibold))
+                        .foregroundStyle(Color.appAccent)
+                }
             }
 
             VStack(spacing: 14) {
