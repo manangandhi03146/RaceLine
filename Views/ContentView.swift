@@ -45,6 +45,7 @@ struct ContentView: View {
     @State private var saveFinalizeRetryPending = false
     @State private var showStartRideTypePrompt  = false
     @State private var showTrackModeWarning     = false
+    @State private var showLocationDeniedAlert  = false
 
     // Ride list state
     @State private var expandedRideID: UUID?
@@ -249,6 +250,8 @@ struct ContentView: View {
                             awaitingSavePrompt = true
                             recorder.stop()
                             UIApplication.shared.isIdleTimerDisabled = false
+                        } else if location.isPermissionBlocked {
+                            showLocationDeniedAlert = true
                         } else {
                             showStartRideTypePrompt = true
                         }
@@ -303,6 +306,16 @@ struct ContentView: View {
             Button("Start Track Ride") { beginRide(rideType: .track) }
         } message: {
             Text("Track mode is not a lap timer or official timing device. Use only on closed circuits.")
+        }
+        .alert("Location Access Needed", isPresented: $showLocationDeniedAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("RaceLine needs location access to record your ride. Enable it in Settings → Privacy → Location Services → RaceLine.")
         }
         .sheet(isPresented: $showNameSheet) {
             SaveRideSheet(

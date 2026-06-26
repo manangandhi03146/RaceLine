@@ -44,6 +44,7 @@
 		AA000001000000010000AAAF /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAAE /* UserProfile.swift */; };
 		AA000001000000010000AAB1 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAB0 /* OnboardingView.swift */; };
 		AA000001000000010000AAB3 /* OAuthLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAB2 /* OAuthLauncher.swift */; };
+		AA000001000000010000AAB5 /* IntroTutorialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAB4 /* IntroTutorialView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -103,6 +104,7 @@
 		AA000001000000010000AAAE /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
 		AA000001000000010000AAB0 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		AA000001000000010000AAB2 /* OAuthLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthLauncher.swift; sourceTree = "<group>"; };
+		AA000001000000010000AAB4 /* IntroTutorialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroTutorialView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -238,6 +240,7 @@
 				4FAB00002FAB00010012ABCD /* ProfileView.swift */,
 				AA000001000000010000AAA6 /* MaintenanceView.swift */,
 				AA000001000000010000AAB0 /* OnboardingView.swift */,
+				AA000001000000010000AAB4 /* IntroTutorialView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -426,6 +429,7 @@
 				AA000001000000010000AAAF /* UserProfile.swift in Sources */,
 				AA000001000000010000AAB1 /* OnboardingView.swift in Sources */,
 				AA000001000000010000AAB3 /* OAuthLauncher.swift in Sources */,
+				AA000001000000010000AAB5 /* IntroTutorialView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -594,8 +598,8 @@
 				INFOPLIST_FILE = MotorcycleTrackShare/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RaceLine;
 				INFOPLIST_KEY_CFBundleName = RaceLine;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Used to record your ride route and speed";
-				INFOPLIST_KEY_NSMotionUsageDescription = "Used to record lean angle and motion during rides";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RaceLine uses your location to record your ride route, speed, and elevation. Location data is only collected while a ride is actively recording.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "RaceLine uses motion sensors to measure lean angle, acceleration, and braking forces during rides.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -628,8 +632,8 @@
 				INFOPLIST_FILE = MotorcycleTrackShare/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RaceLine;
 				INFOPLIST_KEY_CFBundleName = RaceLine;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Used to record your ride route and speed";
-				INFOPLIST_KEY_NSMotionUsageDescription = "Used to record lean angle and motion during rides";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RaceLine uses your location to record your ride route, speed, and elevation. Location data is only collected while a ride is actively recording.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "RaceLine uses motion sensors to measure lean angle, acceleration, and braking forces during rides.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

@@ -12,6 +12,8 @@ struct SettingsView: View {
     @AppStorage("routeHideDistanceMiles")    private var routeHideDistanceMiles: Double = 0.25
     @AppStorage("cloudSyncPaused")           private var cloudSyncPaused: Bool = false
 
+    @AppStorage("hasSeenIntroTutorial") private var hasSeenIntroTutorial: Bool = true
+
     @State private var showFullRouteWarning = false
     @State private var pendingStorageMode: StorageMode?
     @State private var showForceResyncConfirm = false
@@ -163,6 +165,21 @@ struct SettingsView: View {
                     .font(.caption)
             }
 
+            // Help
+            Section {
+                Button {
+                    hasSeenIntroTutorial = false
+                } label: {
+                    Label("Show Intro Tutorial", systemImage: "play.circle")
+                        .foregroundStyle(Color.appAccent)
+                }
+            } header: {
+                Text("Help")
+            } footer: {
+                Text("Replay the welcome walkthrough that appears on first launch.")
+                    .font(.caption)
+            }
+
             // App info
             Section {
                 HStack {
@@ -174,7 +191,7 @@ struct SettingsView: View {
                 HStack {
                     Text("Version")
                     Spacer()
-                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+                    Text(appVersionString)
                         .foregroundStyle(.secondary)
                 }
             } header: {
@@ -201,6 +218,13 @@ struct SettingsView: View {
         } message: {
             Text("Full route data includes exact GPS coordinates that can reveal your home, workplace, and frequently visited locations. Are you sure?")
         }
+    }
+
+    private var appVersionString: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build   = info?["CFBundleVersion"] as? String ?? ""
+        return build.isEmpty ? version : "\(version) (\(build))"
     }
 
     private var syncStatusIcon: String {

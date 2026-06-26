@@ -18,8 +18,8 @@
 	<key>NSCameraReactionEffectGesturesEnabledDefault</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>Allow camera access to take ride photos.</string>
+	<string>RaceLine uses the camera so you can take photos of your bike or ride to attach to a ride entry.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Allow photo library access to choose ride photos.</string>
+	<string>RaceLine uses your photo library so you can pick an existing photo to attach to a ride or bike.</string>
 </dict>
 </plist>
