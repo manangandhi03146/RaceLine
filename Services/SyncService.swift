@@ -185,8 +185,18 @@ final class SyncService: ObservableObject {
                                   cloudTelemetryPath: telemetryPath)
         } catch {
             store.markSyncFailed(id: ride.id)
-            lastSyncError = "Some rides failed to sync. Tap Retry to try again."
+            lastSyncError = Self.friendlyMessage(for: error)
             print("SyncService: failed to sync ride \(ride.id): \(error)")
         }
+    }
+
+    // MARK: - Error formatting
+
+    private static func friendlyMessage(for error: Error) -> String {
+        let raw = error.localizedDescription
+        if let range = raw.range(of: "Ride limit reached", options: .caseInsensitive) {
+            return String(raw[range.lowerBound...])
+        }
+        return "Some rides failed to sync. Tap Retry to try again."
     }
 }
