@@ -82,21 +82,70 @@ final class SyncService: ObservableObject {
               let auth = authService, auth.isLoggedIn,
               let userID = auth.userID else { return }
 
-        guard let store = rideStore,
-              !store.pendingUploadRides.isEmpty && !store.failedSyncRides.isEmpty ||
-              !store.pendingUploadRides.isEmpty else { return }
-
         isSyncing = true
         lastSyncError = nil
-
-        let pending = store.pendingUploadRides + store.failedSyncRides
-
-        for ride in pending {
-            await syncRide(ride, userID: userID)
+        defer {
+            isSyncing = false
+            lastSyncDate = Date()
         }
 
-        isSyncing = false
-        lastSyncDate = Date()
+        // 1. Push any locally-recorded rides waiting to upload.
+        if let store = rideStore {
+            let pending = store.pendingUploadRides + store.failedSyncRides
+            for ride in pending {
+                await syncRide(ride, userID: userID)
+            }
+        }
+
+        // 2. Pull any rides from the cloud that don't exist locally
+        //    (e.g. recorded on another device with the same account).
+        await pullRemoteRides(userID: userID)
+    }
+
+    // MARK: - Pull from cloud
+
+    /// Fetches every ride summary from Supabase for the signed-in user and
+    /// creates a local mirror for anything missing on disk. Photos and full
+    /// telemetry files are downloaded so the ride works offline afterwards.
+    private func pullRemoteRides(userID: UUID) async {
+        guard let store = rideStore else { return }
+        let cloud = CloudRideStore()
+
+        let remotes: [CloudRideSummary]
+        do {
+            remotes = try await cloud.fetchRideSummaries(userID: userID)
+        } catch {
+            print("SyncService: failed to fetch remote rides: \(error)")
+            return
+        }
+
+        let localIDs = Set(store.rides.map { $0.id })
+
+        for remote in remotes {
+            guard let candidateID = remote.localId, !localIDs.contains(candidateID) else { continue }
+
+            var photoData: Data? = nil
+            if remote.hasPhoto, let path = remote.photoPath {
+                do {
+                    let image = try await cloud.downloadPhoto(path: path)
+                    photoData = image.jpegData(compressionQuality: 0.9)
+                } catch {
+                    print("SyncService: photo download failed for \(remote.id): \(error)")
+                }
+            }
+
+            var telemetryData: Data? = nil
+            if remote.hasFullTelemetry {
+                let path = cloud.telemetryStoragePath(userID: userID, rideID: candidateID)
+                do {
+                    telemetryData = try await cloud.downloadTelemetry(path: path)
+                } catch {
+                    print("SyncService: telemetry download failed for \(remote.id): \(error)")
+                }
+            }
+
+            store.ingestRemote(remote, photoData: photoData, telemetryData: telemetryData)
+        }
     }
 
     private func syncRide(_ ride: SavedRide, userID: UUID) async {

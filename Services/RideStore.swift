@@ -243,6 +243,106 @@ final class RideStore: ObservableObject {
         return writeAndUpdate(updated, at: index)
     }
 
+    /// Materializes a remote ride on disk as if it had been recorded on this
+    /// device. Used by SyncService when pulling rides from the cloud that
+    /// don't exist locally (e.g. recorded on another device).
+    ///
+    /// Returns the local ride if it was newly created, or `nil` if a ride
+    /// with the same local_id already exists.
+    @discardableResult
+    func ingestRemote(_ remote: CloudRideSummary,
+                      photoData: Data?,
+                      telemetryData: Data?) -> SavedRide? {
+        guard let localID = remote.localId ?? UUID(uuidString: remote.id.uuidString) else { return nil }
+        if rides.contains(where: { $0.id == localID }) { return nil }
+
+        let folder = baseURL.appendingPathComponent(localID.uuidString, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+            var photoFilename: String?
+            if let photoData {
+                let name = "ride-photo.jpg"
+                try photoData.write(to: folder.appendingPathComponent(name), options: [.atomic])
+                photoFilename = name
+            }
+
+            var logFilename = "samples.jsonl"
+            if let telemetryData {
+                try telemetryData.write(to: folder.appendingPathComponent(logFilename), options: [.atomic])
+            } else {
+                // No telemetry to pull — leave a placeholder so the model is consistent.
+                logFilename = "remote.placeholder"
+            }
+
+            let rideType = RideType(rawValue: remote.rideType ?? "street") ?? .street
+            let storageMode = StorageMode(rawValue: remote.storageMode ?? "cloudSummaryOnly")?.canonical
+                ?? .cloudSummaryOnly
+
+            let summary = RideSummary(
+                startTime:            remote.startedAt ?? remote.createdAt ?? Date(),
+                endTime:              remote.endedAt ?? remote.createdAt ?? Date(),
+                durationSec:          remote.durationSeconds,
+                distanceM:            remote.distanceMeters,
+                maxSpeedMps:          remote.maxSpeedMps,
+                maxAbsLeanDeg:        remote.maxLeanDeg,
+                maxLeanRightDeg:      remote.maxLeanDeg,
+                maxLeanLeftDeg:       remote.maxLeanDeg,
+                avgSpeedMps:          remote.avgSpeedMps ?? 0,
+                elevationGainM:       nil,
+                minAltitudeM:         nil,
+                maxAltitudeM:         nil,
+                hardBrakingCount:     nil,
+                aggressiveAccelCount: nil
+            )
+
+            let ride = SavedRide(
+                id: localID,
+                createdAt:           remote.createdAt ?? Date(),
+                name:                remote.name ?? defaultName(from: remote.createdAt ?? Date()),
+                bikeID:              nil,
+                summary:             summary,
+                route:               [],
+                logFilename:         logFilename,
+                photoFilename:       photoFilename,
+                source:              .recorded,
+                metricAvailability:  .allAvailable,
+                storageMode:         storageMode,
+                syncStatus:          .synced,
+                cloudPhotoPath:      remote.photoPath,
+                cloudTelemetryPath:  remote.hasFullTelemetry
+                    ? "\(localID.uuidString)" // placeholder — SyncService can fix on next upload
+                    : nil,
+                remoteID:            remote.id,
+                rideType:            rideType,
+                notes:               remote.notes,
+                tags:                remote.tags?.isEmpty == false ? remote.tags : nil,
+                trackName:           nil,
+                sessionName:         nil,
+                sessionNotes:        nil,
+                tirePressure:        nil,
+                tireType:            nil,
+                suspensionNotes:     nil
+            )
+
+            try writeMeta(ride, to: folder)
+            rides.insert(ride, at: 0)
+            rides.sort { $0.createdAt > $1.createdAt }
+            return ride
+        } catch {
+            print("RideStore.ingestRemote error:", error)
+            return nil
+        }
+    }
+
+    private func defaultName(from date: Date) -> String {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return "Ride \(f.string(from: date))"
+    }
+
     func markAllCloudRidesPendingUpload() {
         rides
             .filter { $0.effectiveStorageMode.isCloudEnabled }

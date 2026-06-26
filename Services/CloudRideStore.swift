@@ -88,6 +88,16 @@ struct CloudRideStore {
         return result
     }
 
+    // MARK: - Download media
+
+    func downloadPhoto(path: String) async throws -> UIImage {
+        try await storage.downloadPhoto(path: path, bucket: "ride-photos")
+    }
+
+    func downloadTelemetry(path: String) async throws -> Data {
+        try await client.storage.from("ride-telemetry").download(path: path)
+    }
+
     // MARK: - Path helpers
 
     func photoStoragePath(userID: UUID, rideID: UUID) -> String {
