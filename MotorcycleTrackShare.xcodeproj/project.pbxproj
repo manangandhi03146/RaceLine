@@ -39,7 +39,6 @@
 		AA000001000000010000AAA3 /* MaintenanceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAA2 /* MaintenanceStore.swift */; };
 		AA000001000000010000AAA5 /* SyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAA4 /* SyncService.swift */; };
 		AA000001000000010000AAA7 /* MaintenanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAA6 /* MaintenanceView.swift */; };
-		AA000001000000010000AAA9 /* AppleSignInCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAA8 /* AppleSignInCoordinator.swift */; };
 		AA000001000000010000AAAB /* AuthState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAAA /* AuthState.swift */; };
 		AA000001000000010000AAAD /* ProfileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAAC /* ProfileService.swift */; };
 		AA000001000000010000AAAF /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000010000AAAE /* UserProfile.swift */; };
@@ -99,7 +98,6 @@
 		AA000001000000010000AAA2 /* MaintenanceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceStore.swift; sourceTree = "<group>"; };
 		AA000001000000010000AAA4 /* SyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncService.swift; sourceTree = "<group>"; };
 		AA000001000000010000AAA6 /* MaintenanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceView.swift; sourceTree = "<group>"; };
-		AA000001000000010000AAA8 /* AppleSignInCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInCoordinator.swift; sourceTree = "<group>"; };
 		AA000001000000010000AAAA /* AuthState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthState.swift; sourceTree = "<group>"; };
 		AA000001000000010000AAAC /* ProfileService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileService.swift; sourceTree = "<group>"; };
 		AA000001000000010000AAAE /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
@@ -218,7 +216,6 @@
 				4F5009592F132C79005C33B3 /* LocationService.swift */,
 				AA000001000000010000AAA2 /* MaintenanceStore.swift */,
 				AA000001000000010000AAA4 /* SyncService.swift */,
-				AA000001000000010000AAA8 /* AppleSignInCoordinator.swift */,
 				AA000001000000010000AAAA /* AuthState.swift */,
 				AA000001000000010000AAAC /* ProfileService.swift */,
 				AA000001000000010000AAB2 /* OAuthLauncher.swift */,
@@ -424,7 +421,6 @@
 				AA000001000000010000AAA3 /* MaintenanceStore.swift in Sources */,
 				AA000001000000010000AAA5 /* SyncService.swift in Sources */,
 				AA000001000000010000AAA7 /* MaintenanceView.swift in Sources */,
-				AA000001000000010000AAA9 /* AppleSignInCoordinator.swift in Sources */,
 				AA000001000000010000AAAB /* AuthState.swift in Sources */,
 				AA000001000000010000AAAD /* ProfileService.swift in Sources */,
 				AA000001000000010000AAAF /* UserProfile.swift in Sources */,

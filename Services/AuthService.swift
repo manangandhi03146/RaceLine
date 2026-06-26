@@ -1,5 +1,7 @@
+import AuthenticationServices
 import Foundation
 import Combine
+import CryptoKit
 import Supabase
 
 /// Owns the authentication lifecycle for the app.
@@ -23,8 +25,13 @@ final class AuthService: ObservableObject {
 
     private let client          = SupabaseManager.shared.client
     private let profileService  = ProfileService()
-    private let appleCoordinator = AppleSignInCoordinator()
     private let oauthLauncher    = OAuthLauncher()
+
+    /// Nonce used for the most recent `SignInWithAppleButton` request.
+    /// The button's own flow drives the credential UI; we provide the nonce
+    /// when configuring the request and reuse the raw value here to verify
+    /// the identity token with Supabase.
+    private var pendingAppleNonce: String?
 
     /// URL scheme registered in Info.plist; Supabase will redirect here after OAuth completes.
     /// Must also be allow-listed in Supabase Dashboard → Authentication → URL Configuration.
@@ -64,26 +71,54 @@ final class AuthService: ObservableObject {
 
     // MARK: - Sign in with Apple
 
-    /// Runs the Apple credential flow, exchanges the identity token with Supabase,
-    /// and routes the user to onboarding or the main app.
-    func signInWithApple() async {
+    /// Hand to `SignInWithAppleButton`'s request-configuration closure.
+    /// Generates a fresh nonce, stores the raw value for later verification,
+    /// and asks Apple for the SHA-256 hash in the request.
+    func configureAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
+        let nonce = Self.randomNonceString()
+        pendingAppleNonce = nonce
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = Self.sha256(nonce)
+    }
+
+    /// Hand to `SignInWithAppleButton`'s completion closure. Exchanges the
+    /// Apple identity token with Supabase using the nonce we stashed during
+    /// `configureAppleRequest`.
+    func handleAppleCompletion(_ result: Result<ASAuthorization, Error>) async {
         lastError = nil
-        state = .authenticating
-        do {
-            let apple = try await appleCoordinator.requestSignIn()
+        switch result {
+        case .failure(let error):
+            if let asError = error as? ASAuthorizationError, asError.code == .canceled {
+                // User dismissed Apple's sheet — quiet return.
+                state = .signedOut
+            } else {
+                lastError = Self.friendlyMessage(for: error)
+                state = .signedOut
+            }
+            pendingAppleNonce = nil
 
-            let session = try await client.auth.signInWithIdToken(
-                credentials: .init(provider: .apple, idToken: apple.idToken, nonce: apple.rawNonce)
-            )
-
-            let displayName = Self.combinedName(from: apple.fullName)
-            await refreshState(for: session.user, freshDisplayName: displayName)
-        } catch AppleSignInCoordinator.CoordinatorError.cancelled {
-            // User dismissed the sheet — return quietly to the signed-out screen.
-            state = .signedOut
-        } catch {
-            lastError = Self.friendlyMessage(for: error)
-            state = .signedOut
+        case .success(let authorization):
+            state = .authenticating
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let tokenData = credential.identityToken,
+                  let idToken = String(data: tokenData, encoding: .utf8),
+                  let nonce = pendingAppleNonce else {
+                lastError = "Apple didn't return a usable identity token. Please try again."
+                state = .signedOut
+                pendingAppleNonce = nil
+                return
+            }
+            pendingAppleNonce = nil
+            do {
+                let session = try await client.auth.signInWithIdToken(
+                    credentials: .init(provider: .apple, idToken: idToken, nonce: nonce)
+                )
+                let displayName = Self.combinedName(from: credential.fullName)
+                await refreshState(for: session.user, freshDisplayName: displayName)
+            } catch {
+                lastError = Self.friendlyMessage(for: error)
+                state = .signedOut
+            }
         }
     }
 
@@ -213,6 +248,33 @@ final class AuthService: ObservableObject {
 
     private static func onboardingKey(userID: UUID) -> String {
         "onboardingComplete.\(userID.uuidString)"
+    }
+
+    // MARK: - Nonce helpers (shared with SignInWithAppleButton)
+
+    private static func randomNonceString(length: Int = 32) -> String {
+        precondition(length > 0)
+        let charset: [Character] =
+            Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._")
+        var result = ""
+        var remaining = length
+        while remaining > 0 {
+            var randoms = [UInt8](repeating: 0, count: 16)
+            let status = SecRandomCopyBytes(kSecRandomDefault, randoms.count, &randoms)
+            precondition(status == errSecSuccess, "SecRandomCopyBytes failed: \(status)")
+            for random in randoms where remaining > 0 {
+                if random < charset.count {
+                    result.append(charset[Int(random)])
+                    remaining -= 1
+                }
+            }
+        }
+        return result
+    }
+
+    private static func sha256(_ input: String) -> String {
+        let hashed = SHA256.hash(data: Data(input.utf8))
+        return hashed.map { String(format: "%02x", $0) }.joined()
     }
 
     private static func combinedName(from components: PersonNameComponents?) -> String? {

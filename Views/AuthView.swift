@@ -57,11 +57,9 @@ struct AuthView: View {
                     } else {
                         VStack(spacing: 10) {
                             SignInWithAppleButton(.continue) { request in
-                                // The button itself is just for visuals/accessibility;
-                                // `AppleSignInCoordinator` runs the real request.
-                                request.requestedScopes = [.fullName, .email]
-                            } onCompletion: { _ in
-                                Task { await authService.signInWithApple() }
+                                authService.configureAppleRequest(request)
+                            } onCompletion: { result in
+                                Task { await authService.handleAppleCompletion(result) }
                             }
                             .signInWithAppleButtonStyle(.white)
                             .frame(height: 50)
