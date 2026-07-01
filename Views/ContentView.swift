@@ -884,6 +884,8 @@ private struct RideDetailScreen: View {
     @State private var shareInitialRideID: UUID?
     @State private var showAnalyzeSheet     = false
     @State private var showExportFormatDialog = false
+    @State private var showShareOptionsDialog = false
+    @State private var showShareRouteSheet    = false
 
     init(ride: SavedRide, initialPhoto: UIImage?, bikes: [GarageBike],
          onExportJSONL: (() -> URL?)?,
@@ -943,8 +945,7 @@ private struct RideDetailScreen: View {
                     .clipShape(Capsule())
 
                     Button {
-                        shareInitialRideID = ride.id
-                        showingShareCover = true
+                        showShareOptionsDialog = true
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "square.and.arrow.up")
@@ -1175,6 +1176,24 @@ private struct RideDetailScreen: View {
             Button("GPX (route)")   { runExport(format: .gpx) }
             Button("JSON (full ride)") { runExport(format: .json) }
             Button("Cancel", role: .cancel) { }
+        }
+        .confirmationDialog("Share Ride",
+                            isPresented: $showShareOptionsDialog,
+                            titleVisibility: .visible) {
+            Button("Share Card") {
+                shareInitialRideID = ride.id
+                showingShareCover = true
+            }
+            Button("Share Route to Feed") {
+                showShareRouteSheet = true
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .sheet(isPresented: $showShareRouteSheet) {
+            ShareRouteSheet(ride: ride)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+                .interactiveDismissDisabled(true)
         }
         .fullScreenCover(isPresented: $showingShareCover) {
             NavigationStack {

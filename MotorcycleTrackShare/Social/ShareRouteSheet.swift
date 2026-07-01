@@ -203,7 +203,7 @@ struct ShareRouteSheet: View {
             ))
             dismiss()
         } catch {
-            errorMessage = "Couldn't share the route right now."
+            errorMessage = userFacingSupabaseError(error, feature: "route sharing")
         }
     }
 }
