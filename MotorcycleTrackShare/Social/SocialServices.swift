@@ -55,6 +55,20 @@ struct SocialProfileService {
         }
     }
 
+    /// Fetch multiple profiles in a single request. RLS keeps this to
+    /// (a) the caller's own profile and (b) profiles marked `is_public`.
+    /// Returns whichever ones RLS lets through, in any order.
+    func fetchProfiles(userIDs: [UUID]) async throws -> [SocialProfile] {
+        guard !userIDs.isEmpty else { return [] }
+        let ids = userIDs.map { $0.uuidString.lowercased() }
+        return try await client
+            .from(SocialTable.profiles)
+            .select("id, username, display_name, bio, avatar_path, is_public, show_bikes, show_ride_stats")
+            .in("id", values: ids)
+            .execute()
+            .value
+    }
+
     /// Case-insensitive search by username/display_name for public profiles.
     /// Returns at most 20 rows.
     func searchPublic(query: String) async throws -> [SocialProfile] {
@@ -499,6 +513,23 @@ struct SharedRouteService {
             .limit(limit)
             .execute()
             .value
+    }
+
+    /// Single shared route by id. RLS enforces visibility — returns
+    /// SocialError.notFound if the caller isn't allowed to view it.
+    func route(id: UUID) async throws -> SharedRoute {
+        do {
+            return try await client
+                .from(SocialTable.sharedRoutes)
+                .select()
+                .eq("id", value: id.uuidString)
+                .single()
+                .execute()
+                .value
+        } catch {
+            if isNotFound(error) { throw SocialError.notFound }
+            throw error
+        }
     }
 
     /// Publicly-visible routes (RLS filters everything else automatically).

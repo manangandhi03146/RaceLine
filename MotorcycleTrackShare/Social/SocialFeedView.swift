@@ -92,8 +92,10 @@ struct ActivityFeedTab: View {
 
     @State private var state: LoadState = .loading
     @State private var events: [ActivityEvent] = []
+    @State private var profilesByID: [UUID: SocialProfile] = [:]
 
-    private let service = ActivityFeedService()
+    private let feedService = ActivityFeedService()
+    private let profileService = SocialProfileService()
 
     private enum LoadState: Equatable { case loading, loaded, empty, error(String) }
 
@@ -116,7 +118,7 @@ struct ActivityFeedTab: View {
                         .padding(.top, 40)
                 case .loaded:
                     ForEach(events) { event in
-                        FeedRow(event: event)
+                        feedRow(for: event)
                     }
                 }
             }
@@ -128,6 +130,27 @@ struct ActivityFeedTab: View {
         .task { await reload() }
     }
 
+    // Wrap in a NavigationLink when the event kind has a tappable target.
+    @ViewBuilder
+    private func feedRow(for event: ActivityEvent) -> some View {
+        let actor = profilesByID[event.actorID]
+        switch event.kind {
+        case .sharedRoutePosted:
+            if let subjectID = event.subjectID {
+                NavigationLink {
+                    SharedRouteDetailView(routeID: subjectID)
+                } label: {
+                    FeedRow(event: event, actor: actor)
+                }
+                .buttonStyle(.plain)
+            } else {
+                FeedRow(event: event, actor: actor)
+            }
+        default:
+            FeedRow(event: event, actor: actor)
+        }
+    }
+
     private func reload() async {
         guard authService.isLoggedIn else {
             state = .error("Sign in to see your feed.")
@@ -135,11 +158,21 @@ struct ActivityFeedTab: View {
         }
         state = .loading
         do {
-            let list = try await service.feed(limit: 40)
+            let list = try await feedService.feed(limit: 40)
             events = list
             state = list.isEmpty ? .empty : .loaded
+            await loadActorProfiles(for: list)
         } catch {
             state = .error(userFacingSupabaseError(error, feature: "feed"))
+        }
+    }
+
+    private func loadActorProfiles(for events: [ActivityEvent]) async {
+        let ids = Set(events.map(\.actorID))
+        let missing = ids.subtracting(profilesByID.keys)
+        guard !missing.isEmpty else { return }
+        if let fetched = try? await profileService.fetchProfiles(userIDs: Array(missing)) {
+            for p in fetched { profilesByID[p.id] = p }
         }
     }
 }
@@ -164,6 +197,7 @@ func userFacingSupabaseError(_ error: Error, feature: String) -> String {
 
 private struct FeedRow: View {
     let event: ActivityEvent
+    let actor: SocialProfile?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -176,9 +210,19 @@ private struct FeedRow: View {
                     .foregroundStyle(Color.appAccent)
             }
             VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(actorLine)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.textPrimary)
+                    if event.kind == .sharedRoutePosted {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Color.textTertiary)
+                    }
+                }
                 if let title = event.title, !title.isEmpty {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 14))
                         .foregroundStyle(Color.textPrimary)
                 }
                 if let summary = event.summary, !summary.isEmpty {
@@ -194,6 +238,14 @@ private struct FeedRow: View {
             Spacer(minLength: 0)
         }
         .minimalCard()
+    }
+
+    private var actorLine: String {
+        if let actor {
+            if let name = actor.displayName, !name.isEmpty { return name }
+            if let u = actor.username, !u.isEmpty          { return "@\(u)" }
+        }
+        return "A rider"
     }
 }
 
