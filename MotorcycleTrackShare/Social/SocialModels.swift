@@ -221,6 +221,15 @@ struct GroupInsert: Encodable {
         case isPublic   = "is_public"
         case joinCode   = "join_code"
     }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(ownerID.uuidString.lowercased(), forKey: .ownerID)
+        try c.encode(name, forKey: .name)
+        if let description { try c.encode(description, forKey: .description) }
+        try c.encode(isPublic, forKey: .isPublic)
+        try c.encode(joinCode, forKey: .joinCode)
+    }
 }
 
 struct GroupMember: Codable, Identifiable, Equatable, Hashable {

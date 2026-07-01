@@ -15,11 +15,12 @@ Run in this exact order:
 5. `migrations/005_cloud_ride_limit.sql` — Adds the 10-ride free cloud cap
 6. `migrations/006_social.sql` — Phase 3: groups, challenges, follows, shared routes, activity feed, privacy
 7. `migrations/007_social_rls.sql` — RLS policies + helper functions for Phase 3
+8. `migrations/008_group_ownership_limit.sql` — Enforce 5-group free ownership cap via trigger
 
 Then:
-8. Create storage buckets manually (see below)
-9. Deploy Edge Functions (see below)
-10. Configure Auth redirect URLs (see below)
+9. Create storage buckets manually (see below)
+10. Deploy Edge Functions (see below)
+11. Configure Auth redirect URLs (see below)
 
 ---
 

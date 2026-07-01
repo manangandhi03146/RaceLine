@@ -4,6 +4,7 @@ import Foundation
 /// New features can be added here without touching call sites.
 enum ProFeature: String, CaseIterable {
     case unlimitedBikes
+    case unlimitedGroups
     case advancedAnalytics
     case aiRideSummary
     case cloudBackup
@@ -13,6 +14,7 @@ enum ProFeature: String, CaseIterable {
     var displayName: String {
         switch self {
         case .unlimitedBikes:    return "Unlimited Bikes"
+        case .unlimitedGroups:   return "Unlimited Group Ownership"
         case .advancedAnalytics: return "Advanced Analytics"
         case .aiRideSummary:     return "AI Ride Summaries"
         case .cloudBackup:       return "Unlimited Cloud Rides"
@@ -24,6 +26,7 @@ enum ProFeature: String, CaseIterable {
     var teaser: String {
         switch self {
         case .unlimitedBikes:    return "Track every bike in your stable — no cap."
+        case .unlimitedGroups:   return "Own more than 5 crews — no cap on groups you create."
         case .advancedAnalytics: return "Deeper stats, smoothness scoring, and hard-event breakdowns."
         case .aiRideSummary:     return "A rider-friendly recap of every ride, generated automatically."
         case .cloudBackup:       return "Sync every ride to the cloud without the 10-ride free cap."
@@ -49,6 +52,10 @@ enum ProTier: String, Codable {
 final class ProFeatureManager: ObservableObject {
     /// Free tier bike ceiling. Applied everywhere the app checks bike limits.
     static let freeBikeLimit: Int = 2
+
+    /// Free tier cap on groups a user can OWN (not join). Joining other
+    /// groups is unlimited on all tiers.
+    static let freeGroupLimit: Int = 5
 
     /// During Phase 2 development every feature is exposed to free users so the
     /// app remains fully usable while payment infrastructure lands later.
@@ -87,6 +94,17 @@ final class ProFeatureManager: ObservableObject {
     func canAddBike(currentCount: Int) -> Bool {
         guard let limit = bikeLimit() else { return true }
         return currentCount < limit
+    }
+
+    /// The free-tier group ownership cap, or nil if unlimited.
+    func groupLimit() -> Int? {
+        isPro ? nil : Self.freeGroupLimit
+    }
+
+    /// Whether the user can create another group given how many they already own.
+    func canCreateGroup(currentOwnedCount: Int) -> Bool {
+        guard let limit = groupLimit() else { return true }
+        return currentOwnedCount < limit
     }
 
     // MARK: - Entitlement mutation (future StoreKit hook)

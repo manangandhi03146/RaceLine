@@ -134,6 +134,7 @@ struct ProUpgradeSheet: View {
     private func iconName(for feature: ProFeature) -> String {
         switch feature {
         case .unlimitedBikes:    return "infinity"
+        case .unlimitedGroups:   return "person.3"
         case .advancedAnalytics: return "chart.bar.xaxis"
         case .aiRideSummary:     return "text.bubble"
         case .cloudBackup:       return "icloud.and.arrow.up"
@@ -146,6 +147,8 @@ struct ProUpgradeSheet: View {
         switch feature {
         case .unlimitedBikes:
             return "Add every bike you own or ride — there's no cap on how many you keep in your garage."
+        case .unlimitedGroups:
+            return "Free accounts can create up to \(ProFeatureManager.freeGroupLimit) groups. You can join as many groups as you want — the cap is only on groups you OWN."
         case .advancedAnalytics:
             return "Smoothness scoring, hard-event breakdowns, route character detection, and deeper stat surfaces on every ride."
         case .aiRideSummary:

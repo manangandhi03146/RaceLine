@@ -6,14 +6,23 @@ import SwiftUI
 /// pushes into `GroupDetailView` on tap.
 struct GroupsView: View {
     @EnvironmentObject private var authService: AuthService
+    @EnvironmentObject private var proFeatures: ProFeatureManager
 
     @State private var groups: [GroupSummary] = []
     @State private var state: LoadState = .loading
     @State private var showCreateSheet = false
     @State private var showJoinSheet = false
+    @State private var showGroupLimitSheet = false
     @State private var actionError: String?
 
     private let service = GroupService()
+
+    /// Groups the current user OWNS. Free tier is capped at
+    /// `ProFeatureManager.freeGroupLimit` — joining others is unlimited.
+    private var ownedGroupCount: Int {
+        guard let uid = authService.userID else { return 0 }
+        return groups.filter { $0.ownerID == uid }.count
+    }
 
     private enum LoadState: Equatable { case loading, loaded, empty, error(String) }
 
@@ -80,12 +89,28 @@ struct GroupsView: View {
             }
             .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $showGroupLimitSheet) {
+            ProUpgradeSheet(
+                feature: .unlimitedGroups,
+                contextTitle: "You've hit the free group-owner cap",
+                contextBody: "Free accounts can create up to \(ProFeatureManager.freeGroupLimit) groups. You can still join as many groups as you want with an invite code — the limit is only on groups you OWN. Delete or leave an owned group to free up a slot."
+            )
+            .presentationDetents([.large])
+        }
+    }
+
+    private func attemptCreate() {
+        if proFeatures.canCreateGroup(currentOwnedCount: ownedGroupCount) {
+            showCreateSheet = true
+        } else {
+            showGroupLimitSheet = true
+        }
     }
 
     private var actionBar: some View {
         HStack(spacing: 8) {
             Button {
-                showCreateSheet = true
+                attemptCreate()
             } label: {
                 Label("Create", systemImage: "plus")
                     .font(.system(size: 14, weight: .semibold))
@@ -243,7 +268,14 @@ struct CreateGroupSheet: View {
         } catch let e as SocialError {
             errorMessage = e.errorDescription
         } catch {
-            errorMessage = "Couldn't create the group. Try again."
+            // Look for the server-side owner-cap trigger message so it
+            // reads as intended instead of a raw Postgres error.
+            let text = "\(error)"
+            if text.contains("Free accounts can only create up to") {
+                errorMessage = "You've hit the \(ProFeatureManager.freeGroupLimit)-group ownership limit. Delete or leave an existing owned group to free up a slot."
+            } else {
+                errorMessage = userFacingSupabaseError(error, feature: "group creation")
+            }
         }
     }
 }
