@@ -169,9 +169,16 @@ struct ShareRouteSheet: View {
             hideEnd: hideEnd,
             trim: trimPoints
         )
+        // NOTE: We intentionally do NOT pass the local ride UUID as
+        // `rideID` here — `shared_routes.ride_id` FK's to `rides.id`, which
+        // is the server-generated cloud UUID (not the on-device UUID stored
+        // in `SavedRide.id`). Passing the local UUID triggers a 23503
+        // foreign-key violation for anyone who hasn't cloud-synced this
+        // specific ride. If we later want to link back, do a lookup by
+        // (user_id, local_id) against the cloud `rides` table first.
         let insert = SharedRouteInsert(
             authorID: uid,
-            rideID: ride.id,
+            rideID: nil,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             description: description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : description,
             distanceMeters: ride.summary.distanceM,
@@ -184,23 +191,28 @@ struct ShareRouteSheet: View {
         )
         do {
             let saved = try await routeService.post(insert)
-            let feedVisibility: ActivityVisibility
-            switch visibility {
-            case .privateOnly:   feedVisibility = .followers // still emit as own row; RLS keeps it owner-only
-            case .followers:     feedVisibility = .followers
-            case .groups:        feedVisibility = .groups
-            case .publicVisible: feedVisibility = .publicVisible
+            // Skip the activity emit entirely for private routes — they
+            // shouldn't appear in any follower / group / public feed.
+            if visibility != .privateOnly {
+                let feedVisibility: ActivityVisibility = {
+                    switch visibility {
+                    case .privateOnly:   return .followers // unreachable, guarded above
+                    case .followers:     return .followers
+                    case .groups:        return .groups
+                    case .publicVisible: return .publicVisible
+                    }
+                }()
+                _ = try? await activityService.emit(ActivityEventInsert(
+                    actorID: uid,
+                    kind: .sharedRoutePosted,
+                    subjectID: saved.id,
+                    subjectKind: "shared_route",
+                    title: "Shared a route",
+                    summary: saved.title,
+                    visibility: feedVisibility,
+                    groupID: saved.groupID
+                ))
             }
-            _ = try? await activityService.emit(ActivityEventInsert(
-                actorID: uid,
-                kind: .sharedRoutePosted,
-                subjectID: saved.id,
-                subjectKind: "shared_route",
-                title: "Shared a route",
-                summary: saved.title,
-                visibility: feedVisibility,
-                groupID: saved.groupID
-            ))
             dismiss()
         } catch {
             errorMessage = userFacingSupabaseError(error, feature: "route sharing")
