@@ -201,13 +201,19 @@ struct GroupService {
 
     // ----- Create / read -----
 
-    /// Creates a group owned by the given user and returns the row. The DB
-    /// trigger inserts the owner into `group_members` automatically.
-    func createGroup(ownerID: UUID, name: String, description: String?, isPublic: Bool) async throws -> GroupSummary {
+    /// Creates a group owned by the current session's user. The owner ID is
+    /// read directly from `client.auth.currentUser.id` so it is guaranteed to
+    /// match `auth.uid()` on the server (which is what the INSERT RLS policy
+    /// checks). Passing the ID from higher layers proved fragile because
+    /// `AuthService.userID` can lag session refreshes and cause 42501.
+    func createGroup(name: String, description: String?, isPublic: Bool) async throws -> GroupSummary {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard name.count >= 2 else { throw SocialError.validation("Group name is too short.") }
+        guard let currentUser = client.auth.currentUser else {
+            throw SocialError.notSignedIn
+        }
         let payload = GroupInsert(
-            ownerID: ownerID,
+            ownerID: currentUser.id,
             name: name,
             description: description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
             isPublic: isPublic,

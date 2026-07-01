@@ -244,26 +244,26 @@ struct CreateGroupSheet: View {
     }
 
     private func create() async {
-        guard let uid = authService.userID else { errorMessage = "Sign in to create a group."; return }
         saving = true
         defer { saving = false }
         do {
             let group = try await service.createGroup(
-                ownerID: uid,
                 name: name,
                 description: description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : description,
                 isPublic: isPublic
             )
-            _ = try? await ActivityFeedService().emit(ActivityEventInsert(
-                actorID: uid,
-                kind: .joinedGroup,
-                subjectID: group.id,
-                subjectKind: "group",
-                title: "Created a group",
-                summary: group.name,
-                visibility: .followers,
-                groupID: nil
-            ))
+            if let uid = authService.userID {
+                _ = try? await ActivityFeedService().emit(ActivityEventInsert(
+                    actorID: uid,
+                    kind: .joinedGroup,
+                    subjectID: group.id,
+                    subjectKind: "group",
+                    title: "Created a group",
+                    summary: group.name,
+                    visibility: .followers,
+                    groupID: nil
+                ))
+            }
             onDone(group)
         } catch let e as SocialError {
             errorMessage = e.errorDescription
