@@ -7,8 +7,6 @@ struct SocialHubView: View {
     @EnvironmentObject private var authService: AuthService
 
     @State private var selection: SocialSegment = .feed
-    @State private var showPrivacySheet = false
-    @State private var showEditProfileSheet = false
 
     enum SocialSegment: String, CaseIterable, Identifiable {
         case feed, groups, challenges, riders
@@ -44,14 +42,6 @@ struct SocialHubView: View {
             .background(Color.appBg)
             .toolbar(.hidden, for: .navigationBar)
         }
-        .sheet(isPresented: $showPrivacySheet) {
-            SocialPrivacyView()
-                .presentationDetents([.large])
-        }
-        .sheet(isPresented: $showEditProfileSheet) {
-            EditOwnProfileView()
-                .presentationDetents([.large])
-        }
     }
 
     // MARK: - Header
@@ -62,29 +52,6 @@ struct SocialHubView: View {
                 .font(.system(size: 34, weight: .bold))
                 .foregroundStyle(.white)
             Spacer()
-            Button {
-                showEditProfileSheet = true
-            } label: {
-                Image(systemName: "person.crop.circle")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color.appAccent)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Edit public profile")
-
-            Button {
-                showPrivacySheet = true
-            } label: {
-                Image(systemName: "lock.shield")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color.appAccent)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Social privacy settings")
         }
         .padding(.horizontal, 12)
         .padding(.top, 6)
@@ -162,16 +129,37 @@ struct ActivityFeedTab: View {
     }
 
     private func reload() async {
-        guard authService.isLoggedIn else { state = .empty; return }
+        guard authService.isLoggedIn else {
+            state = .error("Sign in to see your feed.")
+            return
+        }
         state = .loading
         do {
             let list = try await service.feed(limit: 40)
             events = list
             state = list.isEmpty ? .empty : .loaded
         } catch {
-            state = .error("Couldn't load your feed. Pull down to retry.")
+            state = .error(userFacingSupabaseError(error, feature: "feed"))
         }
     }
+}
+
+/// Turns raw Supabase / Postgrest errors into a message that helps diagnose
+/// the common Phase 3 setup issue — migrations 006 + 007 not applied — while
+/// still preserving the underlying error text so real issues aren't hidden.
+func userFacingSupabaseError(_ error: Error, feature: String) -> String {
+    let text = "\(error)"
+    let lower = text.lowercased()
+    if lower.contains("relation") && (lower.contains("does not exist") || lower.contains("not exist")) {
+        return "The \(feature) tables aren't set up yet. Run supabase/migrations/006_social.sql and 007_social_rls.sql in the Supabase Dashboard, then pull to refresh."
+    }
+    if lower.contains("row level security") || lower.contains("permission denied") {
+        return "Row-level security blocked that query. Confirm 007_social_rls.sql ran successfully."
+    }
+    if lower.contains("network") || lower.contains("offline") {
+        return "You're offline. Reconnect and pull to refresh."
+    }
+    return "Couldn't load \(feature).\n\n\(text)"
 }
 
 private struct FeedRow: View {
@@ -384,7 +372,7 @@ struct RidersTab: View {
         do {
             results = try await profileService.searchPublic(query: trimmed)
         } catch {
-            errorMessage = "Search failed. Try again in a moment."
+            errorMessage = userFacingSupabaseError(error, feature: "search")
             results = []
         }
     }

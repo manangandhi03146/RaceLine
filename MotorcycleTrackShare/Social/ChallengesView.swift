@@ -64,7 +64,7 @@ struct ChallengesView: View {
             progressByID = Dictionary(uniqueKeysWithValues: progresses.map { ($0.challengeID, $0) })
             state = list.isEmpty ? .empty : .loaded
         } catch {
-            state = .error("Couldn't load challenges.")
+            state = .error(userFacingSupabaseError(error, feature: "challenges"))
         }
     }
 }

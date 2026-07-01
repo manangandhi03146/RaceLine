@@ -142,14 +142,17 @@ struct GroupsView: View {
     }
 
     private func reload() async {
-        guard let uid = authService.userID else { state = .empty; return }
+        guard let uid = authService.userID else {
+            state = .error("Sign in to see your groups.")
+            return
+        }
         state = .loading
         do {
             let list = try await service.groups(forUser: uid)
             groups = list
             state = list.isEmpty ? .empty : .loaded
         } catch {
-            state = .error("Couldn't load your groups.")
+            state = .error(userFacingSupabaseError(error, feature: "groups"))
         }
     }
 }

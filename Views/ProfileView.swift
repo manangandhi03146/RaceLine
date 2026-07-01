@@ -11,6 +11,8 @@ struct ProfileView: View {
     @State private var isDeleting = false
     @State private var showDeleteError = false
     @State private var showPrivacyPolicy = false
+    @State private var showEditPublicProfile = false
+    @State private var showSocialPrivacy = false
 
     private var defaultStorageMode: StorageMode {
         StorageMode(rawValue: defaultStorageModeRaw) ?? .localOnly
@@ -139,6 +141,30 @@ struct ProfileView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, 28)
 
+                // Social / Public profile controls
+                VStack(spacing: 10) {
+                    Text("PUBLIC PROFILE")
+                        .font(.system(size: 11, weight: .semibold))
+                        .kerning(0.8)
+                        .foregroundStyle(Color.textGhost)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+
+                    profileLinkRow(
+                        icon: "person.crop.circle",
+                        title: "Public Profile",
+                        subtitle: "Username, bio, and what other riders see"
+                    ) { showEditPublicProfile = true }
+
+                    profileLinkRow(
+                        icon: "lock.shield",
+                        title: "Social Privacy",
+                        subtitle: "Activity visibility and route sharing defaults"
+                    ) { showSocialPrivacy = true }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 28)
+
                 // Account actions
                 VStack(spacing: 10) {
                     PrimaryButton(
@@ -201,6 +227,51 @@ struct ProfileView: View {
         .sheet(isPresented: $showPrivacyPolicy) {
             PrivacyPolicySheet()
         }
+        .sheet(isPresented: $showEditPublicProfile) {
+            EditOwnProfileView()
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showSocialPrivacy) {
+            SocialPrivacyView()
+                .presentationDetents([.large])
+        }
+    }
+
+    private func profileLinkRow(icon: String,
+                                title: String,
+                                subtitle: String,
+                                action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.appAccent.opacity(0.15))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.appAccent)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.textPrimary)
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.textSecondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.textTertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Color.appSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private var profileHeader: some View {
