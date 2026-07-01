@@ -17,11 +17,12 @@ Run in this exact order:
 7. `migrations/007_social_rls.sql` — RLS policies + helper functions for Phase 3
 8. `migrations/008_group_ownership_limit.sql` — Enforce 5-group free ownership cap via trigger
 9. `migrations/009_group_owner_default.sql` — Sets DEFAULT auth.uid() on groups.owner_id and re-seeds the INSERT policy (fixes a 42501 that could occur if 007 didn't fully apply)
+10. `migrations/010_create_group_rpc.sql` — Adds a SECURITY DEFINER `create_group` RPC that the client uses instead of a direct INSERT (bypasses the RLS puzzle we hit on the direct path)
 
 Then:
-10. Create storage buckets manually (see below)
-11. Deploy Edge Functions (see below)
-12. Configure Auth redirect URLs (see below)
+11. Create storage buckets manually (see below)
+12. Deploy Edge Functions (see below)
+13. Configure Auth redirect URLs (see below)
 
 ---
 

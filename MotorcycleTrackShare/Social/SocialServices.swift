@@ -201,26 +201,30 @@ struct GroupService {
 
     // ----- Create / read -----
 
-    /// Creates a group. `owner_id` is intentionally omitted — migration 009
-    /// sets `DEFAULT auth.uid()` on that column so Postgres populates it
-    /// from the JWT itself, making the RLS `WITH CHECK` trivially satisfied
-    /// (auth.uid() = auth.uid()) regardless of any client-side drift.
+    /// Creates a group via the `create_group` SECURITY DEFINER RPC
+    /// (migration 010). The function reads `auth.uid()` internally, enforces
+    /// the free-tier owner cap, and performs the INSERT bypassing RLS. This
+    /// sidesteps the persistent 42501 we saw on the direct-INSERT path.
     func createGroup(name: String, description: String?, isPublic: Bool) async throws -> GroupSummary {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard name.count >= 2 else { throw SocialError.validation("Group name is too short.") }
         guard client.auth.currentUser != nil else {
             throw SocialError.notSignedIn
         }
-        let payload = GroupInsert(
-            name: name,
-            description: description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-            isPublic: isPublic,
-            joinCode: Self.generateJoinCode()
+        struct CreateGroupParams: Encodable {
+            let p_name: String
+            let p_description: String?
+            let p_is_public: Bool
+            let p_join_code: String
+        }
+        let params = CreateGroupParams(
+            p_name: name,
+            p_description: description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            p_is_public: isPublic,
+            p_join_code: Self.generateJoinCode()
         )
         return try await client
-            .from(SocialTable.groups)
-            .insert(payload)
-            .select()
+            .rpc("create_group", params: params)
             .single()
             .execute()
             .value
