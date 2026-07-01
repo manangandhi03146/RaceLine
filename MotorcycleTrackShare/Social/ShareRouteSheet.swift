@@ -1,0 +1,209 @@
+import SwiftUI
+
+/// Sheet that lets a rider publish a saved ride's route to a chosen audience.
+/// Route sanitizer (hide start/end + trim N points) runs in-app before insert
+/// so the sensitive tail points never touch Supabase for private variants.
+struct ShareRouteSheet: View {
+    let ride: SavedRide
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authService: AuthService
+
+    @State private var title: String
+    @State private var description: String = ""
+    @State private var visibility: SharedRouteVisibility = .privateOnly
+    @State private var hideStart: Bool = true
+    @State private var hideEnd: Bool = true
+    @State private var trimPoints: Int = 5
+    @State private var groups: [GroupSummary] = []
+    @State private var selectedGroupID: UUID?
+    @State private var saving = false
+    @State private var errorMessage: String?
+    @State private var showVisibilityDialog = false
+    @State private var showGroupDialog = false
+
+    private let routeService = SharedRouteService()
+    private let groupService = GroupService()
+    private let activityService = ActivityFeedService()
+
+    init(ride: SavedRide) {
+        self.ride = ride
+        _title = State(initialValue: ride.name)
+    }
+
+    var body: some View {
+        ZStack {
+            Color.appBg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                AppSheetHeader(
+                    title: "Share Route",
+                    onCancel: { dismiss() },
+                    saveLabel: "Share",
+                    isSaveDisabled: saving || title.trimmingCharacters(in: .whitespaces).isEmpty,
+                    onSave: { Task { await save() } }
+                )
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        AppFieldGroup(label: "TITLE") {
+                            TextField("", text: $title, prompt: .appPrompt("Route name"))
+                                .foregroundStyle(Color.textPrimary)
+                                .appFieldChrome()
+                        }
+                        AppFieldGroup(label: "DESCRIPTION (OPTIONAL)") {
+                            TextField("", text: $description,
+                                      prompt: .appPrompt("Cornering-heavy, backroads, mild elevation…"),
+                                      axis: .vertical)
+                                .lineLimit(3, reservesSpace: true)
+                                .foregroundStyle(Color.textPrimary)
+                                .appFieldChrome()
+                        }
+                        AppFieldGroup(label: "VISIBILITY") {
+                            DropdownFieldButton(
+                                selectionText: visibility.displayName
+                            ) { showVisibilityDialog = true }
+                        }
+                        Text(visibility.explainer)
+                            .font(.caption)
+                            .foregroundStyle(Color.textSecondary)
+
+                        if visibility == .groups {
+                            AppFieldGroup(label: "GROUP") {
+                                DropdownFieldButton(
+                                    selectionText: selectedGroupName
+                                ) { showGroupDialog = true }
+                            }
+                        }
+
+                        privacyToggles
+
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.system(size: 13))
+                                .foregroundStyle(.red)
+                        }
+                    }
+                    .padding(20)
+                }
+            }
+        }
+        .task { await loadGroups() }
+        .confirmationDialog("Visibility",
+                            isPresented: $showVisibilityDialog,
+                            titleVisibility: .visible) {
+            ForEach(SharedRouteVisibility.allCases) { v in
+                Button(v.displayName) { visibility = v }
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .confirmationDialog("Share with which group?",
+                            isPresented: $showGroupDialog,
+                            titleVisibility: .visible) {
+            ForEach(groups) { g in
+                Button(g.name) { selectedGroupID = g.id }
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+    }
+
+    // MARK: - Sections
+
+    private var privacyToggles: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("SAFETY")
+                .font(.system(size: 11, weight: .semibold))
+                .kerning(0.6)
+                .foregroundStyle(Color.textGhost)
+
+            Toggle("Hide the ride's start point", isOn: $hideStart)
+                .tint(Color.appAccent)
+                .foregroundStyle(Color.textPrimary)
+                .appFieldChrome()
+            Toggle("Hide the ride's end point", isOn: $hideEnd)
+                .tint(Color.appAccent)
+                .foregroundStyle(Color.textPrimary)
+                .appFieldChrome()
+
+            HStack {
+                Text("Trim points from each end")
+                    .foregroundStyle(Color.textPrimary)
+                Spacer()
+                Text("\(trimPoints)")
+                    .monospacedDigit()
+                    .foregroundStyle(Color.textSecondary)
+                Stepper("", value: $trimPoints, in: 0...50)
+                    .labelsHidden()
+                    .tint(Color.appAccent)
+            }
+            .appFieldChrome()
+
+            Text("Trimming keeps residences and workplaces off the shared route.")
+                .font(.caption)
+                .foregroundStyle(Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var selectedGroupName: String {
+        groups.first(where: { $0.id == selectedGroupID })?.name ?? "Select a group"
+    }
+
+    // MARK: - Actions
+
+    private func loadGroups() async {
+        guard let uid = authService.userID else { return }
+        groups = (try? await groupService.groups(forUser: uid)) ?? []
+    }
+
+    private func save() async {
+        guard let uid = authService.userID else { errorMessage = "Sign in first."; return }
+        if visibility == .groups, selectedGroupID == nil {
+            errorMessage = "Pick a group to share with."
+            return
+        }
+        saving = true
+        defer { saving = false }
+        let points = SharedRouteService.sanitize(
+            points: ride.route,
+            hideStart: hideStart,
+            hideEnd: hideEnd,
+            trim: trimPoints
+        )
+        let insert = SharedRouteInsert(
+            authorID: uid,
+            rideID: ride.id,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            description: description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : description,
+            distanceMeters: ride.summary.distanceM,
+            visibility: visibility,
+            groupID: visibility == .groups ? selectedGroupID : nil,
+            hideStart: hideStart,
+            hideEnd: hideEnd,
+            trimPoints: trimPoints,
+            routePoints: points
+        )
+        do {
+            let saved = try await routeService.post(insert)
+            let feedVisibility: ActivityVisibility
+            switch visibility {
+            case .privateOnly:   feedVisibility = .followers // still emit as own row; RLS keeps it owner-only
+            case .followers:     feedVisibility = .followers
+            case .groups:        feedVisibility = .groups
+            case .publicVisible: feedVisibility = .publicVisible
+            }
+            _ = try? await activityService.emit(ActivityEventInsert(
+                actorID: uid,
+                kind: .sharedRoutePosted,
+                subjectID: saved.id,
+                subjectKind: "shared_route",
+                title: "Shared a route",
+                summary: saved.title,
+                visibility: feedVisibility,
+                groupID: saved.groupID
+            ))
+            dismiss()
+        } catch {
+            errorMessage = "Couldn't share the route right now."
+        }
+    }
+}

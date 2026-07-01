@@ -1,0 +1,520 @@
+import SwiftUI
+
+// MARK: - Groups list
+
+/// List of the current user's groups. Presents create + join sheets, and
+/// pushes into `GroupDetailView` on tap.
+struct GroupsView: View {
+    @EnvironmentObject private var authService: AuthService
+
+    @State private var groups: [GroupSummary] = []
+    @State private var state: LoadState = .loading
+    @State private var showCreateSheet = false
+    @State private var showJoinSheet = false
+    @State private var actionError: String?
+
+    private let service = GroupService()
+
+    private enum LoadState: Equatable { case loading, loaded, empty, error(String) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            actionBar
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    switch state {
+                    case .loading:
+                        LoadingBlock(message: "Loading groups…")
+                            .padding(.top, 40)
+                    case .empty:
+                        EmptyStateView(
+                            icon: "person.3",
+                            title: "No groups yet",
+                            message: "Create a crew for your riding buddies or join one with a code."
+                        )
+                        .padding(.top, 40)
+                    case .error(let m):
+                        ErrorBlock(message: m) { Task { await reload() } }
+                            .padding(.top, 20)
+                    case .loaded:
+                        ForEach(groups) { group in
+                            NavigationLink {
+                                GroupDetailView(group: group)
+                            } label: {
+                                groupRow(group)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    if let actionError {
+                        Text(actionError)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.textSecondary)
+                            .padding(.vertical, 8)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 100)
+            }
+        }
+        .task { await reload() }
+        .refreshable { await reload() }
+        .sheet(isPresented: $showCreateSheet) {
+            CreateGroupSheet { newGroup in
+                showCreateSheet = false
+                if let newGroup {
+                    groups.insert(newGroup, at: 0)
+                    state = .loaded
+                }
+            }
+            .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showJoinSheet) {
+            JoinGroupSheet { joined in
+                showJoinSheet = false
+                if joined != nil { Task { await reload() } }
+            }
+            .presentationDetents([.medium, .large])
+        }
+    }
+
+    private var actionBar: some View {
+        HStack(spacing: 8) {
+            Button {
+                showCreateSheet = true
+            } label: {
+                Label("Create", systemImage: "plus")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.appAccent)
+                    .clipShape(Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            Button {
+                showJoinSheet = true
+            } label: {
+                Label("Join", systemImage: "key")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.appAccent.opacity(0.15))
+                    .clipShape(Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            Spacer()
+        }
+    }
+
+    private func groupRow(_ group: GroupSummary) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.appAccent.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                Image(systemName: group.isPublic ? "person.3.fill" : "lock.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(group.name)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.textPrimary)
+                    .lineLimit(1)
+                Text(group.isPublic ? "Public group" : "Private group")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.textSecondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.textTertiary)
+        }
+        .minimalCard()
+    }
+
+    private func reload() async {
+        guard let uid = authService.userID else { state = .empty; return }
+        state = .loading
+        do {
+            let list = try await service.groups(forUser: uid)
+            groups = list
+            state = list.isEmpty ? .empty : .loaded
+        } catch {
+            state = .error("Couldn't load your groups.")
+        }
+    }
+}
+
+// MARK: - Create group
+
+struct CreateGroupSheet: View {
+    var onDone: (GroupSummary?) -> Void
+
+    @EnvironmentObject private var authService: AuthService
+    @State private var name = ""
+    @State private var description = ""
+    @State private var isPublic = false
+    @State private var saving = false
+    @State private var errorMessage: String?
+
+    private let service = GroupService()
+
+    var body: some View {
+        ZStack {
+            Color.appBg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                AppSheetHeader(
+                    title: "Create Group",
+                    onCancel: { onDone(nil) },
+                    saveLabel: "Create",
+                    isSaveDisabled: name.trimmingCharacters(in: .whitespaces).count < 2 || saving,
+                    onSave: { Task { await create() } }
+                )
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        AppFieldGroup(label: "GROUP NAME") {
+                            TextField("", text: $name, prompt: .appPrompt("Sunday Sport Crew"))
+                                .foregroundStyle(Color.textPrimary)
+                                .appFieldChrome()
+                        }
+                        AppFieldGroup(label: "DESCRIPTION (OPTIONAL)") {
+                            TextField("", text: $description, prompt: .appPrompt("What's this group about?"), axis: .vertical)
+                                .lineLimit(3, reservesSpace: true)
+                                .foregroundStyle(Color.textPrimary)
+                                .appFieldChrome()
+                        }
+                        Toggle("Public group", isOn: $isPublic)
+                            .tint(Color.appAccent)
+                            .foregroundStyle(Color.textPrimary)
+                            .appFieldChrome()
+                        Text(isPublic
+                             ? "Anyone signed into RaceLine can find and join this group."
+                             : "Only riders with the invite code can join.")
+                            .font(.caption)
+                            .foregroundStyle(Color.textSecondary)
+
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.system(size: 13))
+                                .foregroundStyle(.red)
+                        }
+                    }
+                    .padding(20)
+                }
+            }
+        }
+    }
+
+    private func create() async {
+        guard let uid = authService.userID else { errorMessage = "Sign in to create a group."; return }
+        saving = true
+        defer { saving = false }
+        do {
+            let group = try await service.createGroup(
+                ownerID: uid,
+                name: name,
+                description: description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : description,
+                isPublic: isPublic
+            )
+            _ = try? await ActivityFeedService().emit(ActivityEventInsert(
+                actorID: uid,
+                kind: .joinedGroup,
+                subjectID: group.id,
+                subjectKind: "group",
+                title: "Created a group",
+                summary: group.name,
+                visibility: .followers,
+                groupID: nil
+            ))
+            onDone(group)
+        } catch let e as SocialError {
+            errorMessage = e.errorDescription
+        } catch {
+            errorMessage = "Couldn't create the group. Try again."
+        }
+    }
+}
+
+// MARK: - Join group
+
+struct JoinGroupSheet: View {
+    var onDone: (GroupSummary?) -> Void
+
+    @EnvironmentObject private var authService: AuthService
+    @State private var code = ""
+    @State private var joining = false
+    @State private var errorMessage: String?
+
+    private let service = GroupService()
+
+    var body: some View {
+        ZStack {
+            Color.appBg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                AppSheetHeader(
+                    title: "Join a Group",
+                    onCancel: { onDone(nil) },
+                    saveLabel: "Join",
+                    isSaveDisabled: code.trimmingCharacters(in: .whitespaces).count < 4 || joining,
+                    onSave: { Task { await join() } }
+                )
+
+                VStack(alignment: .leading, spacing: 14) {
+                    AppFieldGroup(label: "INVITE CODE") {
+                        TextField("", text: $code, prompt: .appPrompt("8-character code"))
+                            .foregroundStyle(Color.textPrimary)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.characters)
+                            .appFieldChrome()
+                    }
+                    Text("Ask a group owner or admin for the invite code.")
+                        .font(.caption)
+                        .foregroundStyle(Color.textSecondary)
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.red)
+                    }
+                }
+                .padding(20)
+                Spacer()
+            }
+        }
+    }
+
+    private func join() async {
+        guard let uid = authService.userID else { errorMessage = "Sign in first."; return }
+        joining = true
+        defer { joining = false }
+        do {
+            let group = try await service.joinByCode(userID: uid, code: code)
+            onDone(group)
+        } catch let e as SocialError {
+            errorMessage = e.errorDescription
+        } catch {
+            errorMessage = "Couldn't join. Try again."
+        }
+    }
+}
+
+// MARK: - Group detail
+
+struct GroupDetailView: View {
+    let group: GroupSummary
+
+    @EnvironmentObject private var authService: AuthService
+
+    @State private var members: [GroupMember] = []
+    @State private var rides: [GroupRide] = []
+    @State private var loading = true
+    @State private var errorMessage: String?
+    @State private var showLeaveConfirm = false
+    @State private var didLeave = false
+
+    private let service = GroupService()
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                headerCard
+                inviteCard
+
+                sectionHeader("Members")
+                if members.isEmpty {
+                    Text("Loading members…")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.textSecondary)
+                } else {
+                    ForEach(members) { m in
+                        memberRow(m)
+                    }
+                }
+
+                sectionHeader("Group Rides")
+                if rides.isEmpty {
+                    Text("No group rides posted yet.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.textSecondary)
+                } else {
+                    ForEach(rides) { ride in
+                        rideRow(ride)
+                    }
+                }
+
+                if !didLeave {
+                    Button("Leave Group") { showLeaveConfirm = true }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .foregroundStyle(.white)
+                        .background(Color.red.opacity(0.85))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .padding(.top, 10)
+                }
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.red)
+                }
+            }
+            .padding(20)
+        }
+        .background(Color.appBg.ignoresSafeArea())
+        .navigationTitle(group.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.appSurface, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .task { await reload() }
+        .alert("Leave this group?", isPresented: $showLeaveConfirm) {
+            Button("Leave", role: .destructive) { Task { await leave() } }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("You'll need the invite code to rejoin.")
+        }
+    }
+
+    private var headerCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: group.isPublic ? "person.3.fill" : "lock.fill")
+                    .foregroundStyle(Color.appAccent)
+                Text(group.isPublic ? "Public group" : "Private group")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+            }
+            if let desc = group.description, !desc.isEmpty {
+                Text(desc)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text("Created \(group.createdAt, style: .date)")
+                .font(.caption)
+                .foregroundStyle(Color.textGhost)
+        }
+        .minimalCard()
+    }
+
+    private var inviteCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("INVITE CODE")
+                .font(.system(size: 11, weight: .semibold))
+                .kerning(0.6)
+                .foregroundStyle(Color.textGhost)
+            HStack {
+                Text(group.joinCode)
+                    .font(.system(size: 22, weight: .bold).monospacedDigit())
+                    .foregroundStyle(Color.textPrimary)
+                Spacer()
+                Button {
+                    UIPasteboard.general.string = group.joinCode
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.appAccent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.appAccent.opacity(0.15))
+                        .clipShape(Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            Text("Share this code with fellow riders to invite them.")
+                .font(.caption)
+                .foregroundStyle(Color.textSecondary)
+        }
+        .minimalCard()
+    }
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 13, weight: .semibold))
+            .kerning(0.6)
+            .foregroundStyle(Color.textGhost)
+    }
+
+    private func memberRow(_ member: GroupMember) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "person.fill")
+                .foregroundStyle(Color.appAccent)
+                .frame(width: 26)
+            Text(shortID(member.userID))
+                .font(.system(size: 13))
+                .foregroundStyle(Color.textPrimary)
+            Spacer()
+            Text(member.role.displayName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(member.role == .owner ? Color.appAccent : Color.textSecondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background((member.role == .owner ? Color.appAccent : Color.textSecondary).opacity(0.15))
+                .clipShape(Capsule())
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.appSurface2)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func rideRow(_ ride: GroupRide) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(ride.title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.textPrimary)
+            if let desc = ride.description, !desc.isEmpty {
+                Text(desc)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let scheduled = ride.scheduledAt {
+                Text(scheduled, style: .date)
+                    .font(.caption)
+                    .foregroundStyle(Color.textGhost)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color.appSurface2)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func shortID(_ id: UUID) -> String {
+        String(id.uuidString.prefix(8))
+    }
+
+    private func reload() async {
+        loading = true
+        defer { loading = false }
+        do {
+            async let m = service.members(groupID: group.id)
+            async let r = service.groupRides(groupID: group.id)
+            let (mList, rList) = try await (m, r)
+            members = mList
+            rides = rList
+        } catch {
+            errorMessage = "Couldn't load group. Check your connection."
+        }
+    }
+
+    private func leave() async {
+        guard let uid = authService.userID else { return }
+        do {
+            try await service.leave(userID: uid, groupID: group.id)
+            didLeave = true
+        } catch {
+            errorMessage = "Couldn't leave the group."
+        }
+    }
+}

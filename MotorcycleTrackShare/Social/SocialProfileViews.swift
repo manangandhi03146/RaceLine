@@ -1,0 +1,453 @@
+import SwiftUI
+
+// MARK: - Public profile
+
+/// A rider's public-facing profile. Respects the target user's privacy switches:
+/// non-public profiles show a "This profile is private" state.
+struct PublicProfileView: View {
+    let userID: UUID
+
+    @EnvironmentObject private var authService: AuthService
+    @State private var profile: SocialProfile?
+    @State private var loading = true
+    @State private var isFollowing = false
+    @State private var errorMessage: String?
+
+    private let profileService = SocialProfileService()
+    private let followService = FollowService()
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                if loading {
+                    LoadingBlock(message: "Loading profile…")
+                        .padding(.top, 40)
+                } else if let profile {
+                    if profile.isPublic {
+                        heroCard(profile)
+                        followRow(profile)
+                        if profile.showBikes {
+                            infoCard(icon: "sportbike-placeholder", title: "Bikes",
+                                     detail: "The garage will list bikes here when this rider's data is ready.")
+                        }
+                        if profile.showRideStats {
+                            infoCard(icon: "chart.bar.xaxis", title: "Ride stats",
+                                     detail: "Public ride totals will appear here as data flows in from Supabase.")
+                        }
+                    } else {
+                        EmptyStateView(
+                            icon: "lock.fill",
+                            title: "This profile is private",
+                            message: "Only riders who have made their profile public appear in RaceLine's community search."
+                        )
+                        .padding(.top, 40)
+                    }
+                } else if let errorMessage {
+                    ErrorBlock(message: errorMessage)
+                } else {
+                    EmptyStateView(
+                        icon: "person.crop.circle.badge.questionmark",
+                        title: "Rider not found",
+                        message: "This profile may have been deleted or made private."
+                    )
+                }
+            }
+            .padding(20)
+        }
+        .background(Color.appBg.ignoresSafeArea())
+        .navigationTitle("Rider")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.appSurface, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .task { await reload() }
+    }
+
+    private func heroCard(_ profile: SocialProfile) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(Color.appAccent.opacity(0.15))
+                    .frame(width: 60, height: 60)
+                Image(systemName: "person.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+            }
+            Text(profile.displayName ?? profile.username ?? "Rider")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(Color.textPrimary)
+            if let u = profile.username {
+                Text("@\(u)")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.textSecondary)
+            }
+            if let bio = profile.bio, !bio.isEmpty {
+                Text(bio)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .minimalCard()
+    }
+
+    @ViewBuilder
+    private func followRow(_ profile: SocialProfile) -> some View {
+        if profile.id != authService.userID {
+            Button {
+                Task { await toggleFollow(profile.id) }
+            } label: {
+                Text(isFollowing ? "Following" : "Follow")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isFollowing ? Color.appAccent : .white)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(isFollowing ? Color.appAccent.opacity(0.15) : Color.appAccent)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func infoCard(icon: String, title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .foregroundStyle(Color.appAccent)
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+            }
+            Text(detail)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .minimalCard()
+    }
+
+    // MARK: - Actions
+
+    private func reload() async {
+        loading = true
+        defer { loading = false }
+        do {
+            profile = try await profileService.fetchProfile(userID: userID)
+            if let me = authService.userID {
+                isFollowing = (try? await followService.isFollowing(follower: me, followee: userID)) ?? false
+            }
+        } catch {
+            errorMessage = "Couldn't load this profile."
+        }
+    }
+
+    private func toggleFollow(_ targetID: UUID) async {
+        guard let me = authService.userID else { return }
+        do {
+            if isFollowing {
+                try await followService.unfollow(followerID: me, followeeID: targetID)
+                isFollowing = false
+            } else {
+                try await followService.follow(followerID: me, followeeID: targetID)
+                isFollowing = true
+            }
+        } catch {
+            errorMessage = "Couldn't update follow."
+        }
+    }
+}
+
+// MARK: - Edit own profile
+
+struct EditOwnProfileView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authService: AuthService
+
+    @State private var username = ""
+    @State private var displayName = ""
+    @State private var bio = ""
+    @State private var isPublic = false
+    @State private var showBikes = false
+    @State private var showRideStats = true
+    @State private var saving = false
+    @State private var loading = true
+    @State private var errorMessage: String?
+
+    private let service = SocialProfileService()
+
+    var body: some View {
+        ZStack {
+            Color.appBg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                AppSheetHeader(
+                    title: "Public Profile",
+                    onCancel: { dismiss() },
+                    isSaveDisabled: saving || loading,
+                    onSave: { Task { await save() } }
+                )
+                if loading {
+                    LoadingBlock(message: "Loading profile…")
+                    Spacer()
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Only fields you turn on are visible to other riders. Private info such as email, sign-in provider, and exact ride routes are never shared.")
+                                .font(.caption)
+                                .foregroundStyle(Color.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            AppFieldGroup(label: "USERNAME") {
+                                TextField("", text: $username, prompt: .appPrompt("racer_42"))
+                                    .foregroundStyle(Color.textPrimary)
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+                                    .appFieldChrome()
+                            }
+                            AppFieldGroup(label: "DISPLAY NAME") {
+                                TextField("", text: $displayName, prompt: .appPrompt("Your rider name"))
+                                    .foregroundStyle(Color.textPrimary)
+                                    .appFieldChrome()
+                            }
+                            AppFieldGroup(label: "BIO") {
+                                TextField("", text: $bio,
+                                          prompt: .appPrompt("Sport-touring in the PNW"),
+                                          axis: .vertical)
+                                    .lineLimit(3, reservesSpace: true)
+                                    .foregroundStyle(Color.textPrimary)
+                                    .appFieldChrome()
+                            }
+
+                            Toggle("Make my profile public", isOn: $isPublic)
+                                .tint(Color.appAccent)
+                                .foregroundStyle(Color.textPrimary)
+                                .appFieldChrome()
+                            Toggle("Show my bikes on my profile", isOn: $showBikes)
+                                .tint(Color.appAccent)
+                                .foregroundStyle(Color.textPrimary)
+                                .appFieldChrome()
+                                .disabled(!isPublic)
+                            Toggle("Show my ride stats on my profile", isOn: $showRideStats)
+                                .tint(Color.appAccent)
+                                .foregroundStyle(Color.textPrimary)
+                                .appFieldChrome()
+                                .disabled(!isPublic)
+
+                            if let errorMessage {
+                                Text(errorMessage)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                        .padding(20)
+                    }
+                }
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        guard let uid = authService.userID else {
+            loading = false
+            errorMessage = "Sign in first."
+            return
+        }
+        defer { loading = false }
+        do {
+            let profile = try await service.fetchProfile(userID: uid)
+            username = profile?.username ?? ""
+            displayName = profile?.displayName ?? ""
+            bio = profile?.bio ?? ""
+            isPublic = profile?.isPublic ?? false
+            showBikes = profile?.showBikes ?? false
+            showRideStats = profile?.showRideStats ?? true
+        } catch {
+            errorMessage = "Couldn't load your profile."
+        }
+    }
+
+    private func save() async {
+        guard let uid = authService.userID else { return }
+        saving = true
+        defer { saving = false }
+        do {
+            _ = try await service.updateProfile(userID: uid, SocialProfileUpdate(
+                username: username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().isEmpty ? nil : username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+                displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : displayName.trimmingCharacters(in: .whitespacesAndNewlines),
+                bio: bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : bio.trimmingCharacters(in: .whitespacesAndNewlines),
+                avatarPath: nil,
+                isPublic: isPublic,
+                showBikes: showBikes,
+                showRideStats: showRideStats
+            ))
+            dismiss()
+        } catch let e as SocialError {
+            errorMessage = e.errorDescription
+        } catch {
+            errorMessage = "Couldn't save profile."
+        }
+    }
+}
+
+// MARK: - Social privacy
+
+struct SocialPrivacyView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authService: AuthService
+
+    @State private var settings: SocialPrivacySettings?
+    @State private var loading = true
+    @State private var saving = false
+    @State private var errorMessage: String?
+
+    private let service = SocialPrivacyService()
+
+    var body: some View {
+        ZStack {
+            Color.appBg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                AppSheetHeader(
+                    title: "Social Privacy",
+                    onCancel: { dismiss() },
+                    isSaveDisabled: saving || settings == nil,
+                    onSave: { Task { await save() } }
+                )
+
+                if loading {
+                    LoadingBlock(message: "Loading privacy…")
+                    Spacer()
+                } else if let bound = binding {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Sensible defaults keep your data private. Turn things on only for what you want to share.")
+                                .font(.caption)
+                                .foregroundStyle(Color.textSecondary)
+
+                            groupHeader("Sharing defaults")
+                            toggleRow("Share rides by default", value: bound.shareRidesByDefault)
+                            toggleRow("Hide ride start point by default", value: bound.hideRideStartByDefault)
+                            toggleRow("Hide ride end point by default", value: bound.hideRideEndByDefault)
+
+                            groupHeader("Activity visibility")
+                            toggleRow("Show my ride activities", value: bound.showRideActivities)
+                            toggleRow("Show my challenge activities", value: bound.showChallengeActivities)
+                            toggleRow("Show my maintenance activities", value: bound.showMaintenanceActivities)
+                            toggleRow("Show my group activities", value: bound.showGroupActivities)
+
+                            groupHeader("Route sharing")
+                            DropdownFieldButton(
+                                selectionText: bound.shareDefaultRouteVisibility.wrappedValue.displayName
+                            ) {
+                                showVisibilityDialog = true
+                            }
+
+                            if let errorMessage {
+                                Text(errorMessage)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                        .padding(20)
+                    }
+                    .confirmationDialog("Default route visibility",
+                                        isPresented: $showVisibilityDialog,
+                                        titleVisibility: .visible) {
+                        ForEach(SharedRouteVisibility.allCases) { v in
+                            Button(v.displayName) { settings?.shareDefaultRouteVisibility = v }
+                        }
+                        Button("Cancel", role: .cancel) { }
+                    }
+                }
+            }
+        }
+        .task { await load() }
+    }
+
+    @State private var showVisibilityDialog = false
+
+    private var binding: SocialPrivacyBindings? {
+        guard settings != nil else { return nil }
+        return SocialPrivacyBindings(
+            shareRidesByDefault:         nonNilBinding(\.shareRidesByDefault),
+            hideRideStartByDefault:      nonNilBinding(\.hideRideStartByDefault),
+            hideRideEndByDefault:        nonNilBinding(\.hideRideEndByDefault),
+            showRideActivities:          nonNilBinding(\.showRideActivities),
+            showChallengeActivities:     nonNilBinding(\.showChallengeActivities),
+            showMaintenanceActivities:   nonNilBinding(\.showMaintenanceActivities),
+            showGroupActivities:         nonNilBinding(\.showGroupActivities),
+            shareDefaultRouteVisibility: nonNilBinding(\.shareDefaultRouteVisibility)
+        )
+    }
+
+    private func nonNilBinding<T>(_ keyPath: WritableKeyPath<SocialPrivacySettings, T>) -> Binding<T> {
+        Binding(
+            get: { settings![keyPath: keyPath] },
+            set: { newValue in
+                guard settings != nil else { return }
+                settings![keyPath: keyPath] = newValue
+            }
+        )
+    }
+
+    private func groupHeader(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 11, weight: .semibold))
+            .kerning(0.8)
+            .foregroundStyle(Color.textGhost)
+            .padding(.top, 6)
+    }
+
+    private func toggleRow(_ label: String, value: Binding<Bool>) -> some View {
+        Toggle(label, isOn: value)
+            .tint(Color.appAccent)
+            .foregroundStyle(Color.textPrimary)
+            .appFieldChrome()
+    }
+
+    private func load() async {
+        guard let uid = authService.userID else {
+            loading = false
+            errorMessage = "Sign in first."
+            return
+        }
+        defer { loading = false }
+        do {
+            settings = try await service.fetch(userID: uid)
+        } catch {
+            errorMessage = "Couldn't load privacy settings."
+        }
+    }
+
+    private func save() async {
+        guard let uid = authService.userID, let s = settings else { return }
+        saving = true
+        defer { saving = false }
+        do {
+            _ = try await service.update(userID: uid, SocialPrivacySettingsUpdate(
+                shareRidesByDefault:         s.shareRidesByDefault,
+                hideRideStartByDefault:      s.hideRideStartByDefault,
+                hideRideEndByDefault:        s.hideRideEndByDefault,
+                showRideActivities:          s.showRideActivities,
+                showChallengeActivities:     s.showChallengeActivities,
+                showMaintenanceActivities:   s.showMaintenanceActivities,
+                showGroupActivities:         s.showGroupActivities,
+                shareDefaultRouteVisibility: s.shareDefaultRouteVisibility
+            ))
+            dismiss()
+        } catch {
+            errorMessage = "Couldn't save privacy settings."
+        }
+    }
+}
+
+// MARK: - Binding helper container
+
+private struct SocialPrivacyBindings {
+    let shareRidesByDefault: Binding<Bool>
+    let hideRideStartByDefault: Binding<Bool>
+    let hideRideEndByDefault: Binding<Bool>
+    let showRideActivities: Binding<Bool>
+    let showChallengeActivities: Binding<Bool>
+    let showMaintenanceActivities: Binding<Bool>
+    let showGroupActivities: Binding<Bool>
+    let shareDefaultRouteVisibility: Binding<SharedRouteVisibility>
+}

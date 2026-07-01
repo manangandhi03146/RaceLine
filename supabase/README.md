@@ -11,11 +11,15 @@ Run in this exact order:
 1. `migrations/001_schema.sql` — Creates all tables and triggers
 2. `migrations/002_rls_policies.sql` — Enables RLS and creates access policies
 3. `migrations/003_storage_policies.sql` — Creates storage bucket policies
+4. `migrations/004_trigger_hardening.sql` — Hardens auth trigger for OAuth flows
+5. `migrations/005_cloud_ride_limit.sql` — Adds the 10-ride free cloud cap
+6. `migrations/006_social.sql` — Phase 3: groups, challenges, follows, shared routes, activity feed, privacy
+7. `migrations/007_social_rls.sql` — RLS policies + helper functions for Phase 3
 
 Then:
-4. Create storage buckets manually (see below)
-5. Deploy Edge Functions (see below)
-6. Configure Auth redirect URLs (see below)
+8. Create storage buckets manually (see below)
+9. Deploy Edge Functions (see below)
+10. Configure Auth redirect URLs (see below)
 
 ---
 

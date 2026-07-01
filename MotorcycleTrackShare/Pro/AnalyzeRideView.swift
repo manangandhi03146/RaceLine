@@ -20,6 +20,7 @@ struct AnalyzeRideView: View {
     @State private var analytics: RideAnalytics = .empty
     @State private var summaryState: AIRideSummaryState = .idle
     @State private var didLoad = false
+    @State private var showShareRouteSheet = false
 
     private let summaryService: AIRideSummaryService = AIRideSummaryFactory.makeService()
 
@@ -43,6 +44,8 @@ struct AnalyzeRideView: View {
                     routeInsightsSection
                     safetyNotesSection
 
+                    shareRouteRow
+
                     if onRequestExport != nil {
                         exportRow
                     }
@@ -53,6 +56,10 @@ struct AnalyzeRideView: View {
             }
         }
         .background(Color.appBg.ignoresSafeArea())
+        .sheet(isPresented: $showShareRouteSheet) {
+            ShareRouteSheet(ride: ride)
+                .presentationDetents([.large])
+        }
         .task {
             guard !didLoad else { return }
             didLoad = true
@@ -330,6 +337,38 @@ struct AnalyzeRideView: View {
             notes.append("A lower smoothness score often correlates with fatigue or busy roads. If the score dips again, consider a break or a route change.")
         }
         return notes.joined(separator: "\n\n")
+    }
+
+    // Share route row
+
+    private var shareRouteRow: some View {
+        Button {
+            showShareRouteSheet = true
+        } label: {
+            HStack {
+                Image(systemName: "map")
+                    .font(.system(size: 15, weight: .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Share this route")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Followers, group members, or public")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.textTertiary)
+            }
+            .foregroundStyle(Color.appAccent)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.appSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     // Export row
