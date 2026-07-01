@@ -201,30 +201,26 @@ struct GroupService {
 
     // ----- Create / read -----
 
-    /// Creates a group via the `create_group` SECURITY DEFINER RPC
-    /// (migration 010). The function reads `auth.uid()` internally, enforces
-    /// the free-tier owner cap, and performs the INSERT bypassing RLS. This
-    /// sidesteps the persistent 42501 we saw on the direct-INSERT path.
+    /// Creates a group via a direct INSERT. Migration 012 adds a
+    /// BEFORE INSERT trigger that forces `owner_id := auth.uid()` on the
+    /// server, so we don't send `owner_id` at all and don't depend on
+    /// PostgREST's schema cache picking up any RPC.
     func createGroup(name: String, description: String?, isPublic: Bool) async throws -> GroupSummary {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard name.count >= 2 else { throw SocialError.validation("Group name is too short.") }
         guard client.auth.currentUser != nil else {
             throw SocialError.notSignedIn
         }
-        struct CreateGroupParams: Encodable {
-            let p_name: String
-            let p_description: String?
-            let p_is_public: Bool
-            let p_join_code: String
-        }
-        let params = CreateGroupParams(
-            p_name: name,
-            p_description: description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-            p_is_public: isPublic,
-            p_join_code: Self.generateJoinCode()
+        let payload = GroupInsert(
+            name: name,
+            description: description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            isPublic: isPublic,
+            joinCode: Self.generateJoinCode()
         )
         return try await client
-            .rpc("create_group", params: params)
+            .from(SocialTable.groups)
+            .insert(payload)
+            .select()
             .single()
             .execute()
             .value

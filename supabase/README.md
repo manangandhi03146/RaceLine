@@ -19,11 +19,12 @@ Run in this exact order:
 9. `migrations/009_group_owner_default.sql` — Sets DEFAULT auth.uid() on groups.owner_id and re-seeds the INSERT policy (fixes a 42501 that could occur if 007 didn't fully apply)
 10. `migrations/010_create_group_rpc.sql` — Adds a SECURITY DEFINER `create_group` RPC that the client uses instead of a direct INSERT (bypasses the RLS puzzle we hit on the direct path)
 11. `migrations/011_create_group_bypass_rls.sql` — Adds `SET row_security = off` to the create_group RPC so RLS is disabled inside its execution scope (fixes 42501 that persisted through migration 010 on some Supabase Cloud projects)
+12. `migrations/012_group_owner_trigger.sql` — Trigger-based fallback: BEFORE INSERT trigger forces owner_id := auth.uid(), INSERT policy simplifies to authenticated-only. The app now uses a direct INSERT (no RPC), so PostgREST schema-cache issues stop blocking group creation.
 
 Then:
-12. Create storage buckets manually (see below)
-13. Deploy Edge Functions (see below)
-14. Configure Auth redirect URLs (see below)
+13. Create storage buckets manually (see below)
+14. Deploy Edge Functions (see below)
+15. Configure Auth redirect URLs (see below)
 
 ---
 

@@ -268,16 +268,11 @@ struct CreateGroupSheet: View {
         } catch let e as SocialError {
             errorMessage = e.errorDescription
         } catch {
-            // Look for the server-side owner-cap message so it reads as
-            // intended instead of a raw Postgres error.
             let text = "\(error)"
             if text.contains("Free accounts can only create up to") {
                 errorMessage = "You've hit the \(ProFeatureManager.freeGroupLimit)-group ownership limit. Delete or leave an existing owned group to free up a slot."
             } else if text.contains("Not authenticated") {
                 errorMessage = "Your session is signed out. Sign back in and try again."
-            } else if text.lowercased().contains("could not find the function") ||
-                      text.lowercased().contains("does not exist") {
-                errorMessage = "Group creation isn't set up yet. Run supabase/migrations/010_create_group_rpc.sql in the Supabase Dashboard, then try again."
             } else {
                 errorMessage = userFacingSupabaseError(error, feature: "group creation")
             }
