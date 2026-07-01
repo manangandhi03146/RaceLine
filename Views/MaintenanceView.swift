@@ -136,6 +136,9 @@ struct AddMaintenanceSheet: View {
     @State private var receiptPhoto: UIImage?
     @State private var showPhotoDialog = false
     @State private var photoSource: PhotoPickerSource?
+    @State private var showTypeDialog = false
+    @State private var showBikeDialog = false
+    @State private var showReminderDialog = false
 
     init(garageStore: GarageStore,
          presetBikeID: UUID? = nil,
@@ -200,27 +203,10 @@ struct AddMaintenanceSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         AppFieldGroup(label: "TYPE") {
-                            Menu {
-                                ForEach(MaintenanceType.allCases, id: \.self) { t in
-                                    Button { type = t } label: {
-                                        Label(t.displayName, systemImage: t.iconName)
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: type.iconName)
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(Color.appAccent)
-                                    Text(type.displayName)
-                                        .foregroundStyle(Color.textPrimary)
-                                    Spacer()
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(Color.textSecondary)
-                                }
-                                .appFieldChrome()
-                                .contentShape(Rectangle())
-                            }
+                            DropdownFieldButton(
+                                selectionText: type.displayName,
+                                leadingIcon: type.iconName
+                            ) { showTypeDialog = true }
                         }
 
                         if type == .custom {
@@ -243,24 +229,9 @@ struct AddMaintenanceSheet: View {
                         // pre-scoped the sheet to a specific bike.
                         if presetBikeID == nil, !garageStore.bikes.isEmpty {
                             AppFieldGroup(label: "BIKE") {
-                                Menu {
-                                    Button("No specific bike") { selectedBikeID = nil }
-                                    ForEach(garageStore.bikes.filter { !$0.effectiveIsArchived }) { bike in
-                                        Button(bike.title) { selectedBikeID = bike.id }
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text(selectedBikeLabel)
-                                            .foregroundStyle(Color.textPrimary)
-                                        Spacer()
-                                        Image(systemName: "chevron.down")
-                                            .font(.system(size: 13, weight: .semibold))
-                                            .foregroundStyle(Color.textSecondary)
-                                    }
-                                    .appFieldChrome()
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
+                                DropdownFieldButton(
+                                    selectionText: selectedBikeLabel
+                                ) { showBikeDialog = true }
                             }
                         }
 
@@ -280,24 +251,9 @@ struct AddMaintenanceSheet: View {
                         }
 
                         AppFieldGroup(label: "REMINDER") {
-                            Menu {
-                                ForEach(reminderOptions.indices, id: \.self) { i in
-                                    Button(reminderOptions[i].label) {
-                                        reminderMiles = reminderOptions[i].miles
-                                    }
-                                }
-                            } label: {
-                                HStack {
-                                    Text(selectedReminderLabel)
-                                        .foregroundStyle(Color.textPrimary)
-                                    Spacer()
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(Color.textSecondary)
-                                }
-                                .appFieldChrome()
-                                .contentShape(Rectangle())
-                            }
+                            DropdownFieldButton(
+                                selectionText: selectedReminderLabel
+                            ) { showReminderDialog = true }
                         }
 
                         AppFieldGroup(label: "RECEIPT PHOTO (OPTIONAL)") {
@@ -348,6 +304,25 @@ struct AddMaintenanceSheet: View {
             Button("Choose from Library") { photoSource = .library }
             Button("Cancel", role: .cancel) {}
         }
+        .confirmationDialog("Maintenance Type", isPresented: $showTypeDialog, titleVisibility: .visible) {
+            ForEach(MaintenanceType.allCases, id: \.self) { t in
+                Button(t.displayName) { type = t }
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .confirmationDialog("Bike", isPresented: $showBikeDialog, titleVisibility: .visible) {
+            Button("No specific bike") { selectedBikeID = nil }
+            ForEach(garageStore.bikes.filter { !$0.effectiveIsArchived }) { bike in
+                Button(bike.title) { selectedBikeID = bike.id }
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .confirmationDialog("Reminder", isPresented: $showReminderDialog, titleVisibility: .visible) {
+            ForEach(reminderOptions.indices, id: \.self) { i in
+                Button(reminderOptions[i].label) { reminderMiles = reminderOptions[i].miles }
+            }
+            Button("Cancel", role: .cancel) { }
+        }
         .sheet(item: $photoSource) { src in
             UIKitImagePicker(sourceType: src.sourceType) { receiptPhoto = $0 }
                 .ignoresSafeArea()
@@ -385,6 +360,9 @@ struct EditMaintenanceSheet: View {
     @State private var reminderMiles: Double?
     @State private var receiptPhoto: UIImage?
     @State private var showPhotoDialog = false
+    @State private var showTypeDialog = false
+    @State private var showBikeDialog = false
+    @State private var showReminderDialog = false
     @State private var photoSource: PhotoPickerSource?
 
     private enum PhotoPickerSource: String, Identifiable {
@@ -459,27 +437,10 @@ struct EditMaintenanceSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         AppFieldGroup(label: "TYPE") {
-                            Menu {
-                                ForEach(MaintenanceType.allCases, id: \.self) { t in
-                                    Button { type = t } label: {
-                                        Label(t.displayName, systemImage: t.iconName)
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: type.iconName)
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(Color.appAccent)
-                                    Text(type.displayName)
-                                        .foregroundStyle(Color.textPrimary)
-                                    Spacer()
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(Color.textSecondary)
-                                }
-                                .appFieldChrome()
-                                .contentShape(Rectangle())
-                            }
+                            DropdownFieldButton(
+                                selectionText: type.displayName,
+                                leadingIcon: type.iconName
+                            ) { showTypeDialog = true }
                         }
 
                         if type == .custom {
@@ -500,24 +461,9 @@ struct EditMaintenanceSheet: View {
 
                         if !garageStore.bikes.isEmpty {
                             AppFieldGroup(label: "BIKE") {
-                                Menu {
-                                    Button("No specific bike") { selectedBikeID = nil }
-                                    ForEach(garageStore.bikes.filter { !$0.effectiveIsArchived }) { bike in
-                                        Button(bike.title) { selectedBikeID = bike.id }
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text(selectedBikeLabel)
-                                            .foregroundStyle(Color.textPrimary)
-                                        Spacer()
-                                        Image(systemName: "chevron.down")
-                                            .font(.system(size: 13, weight: .semibold))
-                                            .foregroundStyle(Color.textSecondary)
-                                    }
-                                    .appFieldChrome()
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
+                                DropdownFieldButton(
+                                    selectionText: selectedBikeLabel
+                                ) { showBikeDialog = true }
                             }
                         }
 
@@ -536,24 +482,9 @@ struct EditMaintenanceSheet: View {
                         }
 
                         AppFieldGroup(label: "REMINDER") {
-                            Menu {
-                                ForEach(reminderOptions.indices, id: \.self) { i in
-                                    Button(reminderOptions[i].label) {
-                                        reminderMiles = reminderOptions[i].miles
-                                    }
-                                }
-                            } label: {
-                                HStack {
-                                    Text(selectedReminderLabel)
-                                        .foregroundStyle(Color.textPrimary)
-                                    Spacer()
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(Color.textSecondary)
-                                }
-                                .appFieldChrome()
-                                .contentShape(Rectangle())
-                            }
+                            DropdownFieldButton(
+                                selectionText: selectedReminderLabel
+                            ) { showReminderDialog = true }
                         }
 
                         AppFieldGroup(label: "RECEIPT PHOTO (OPTIONAL)") {
@@ -607,6 +538,25 @@ struct EditMaintenanceSheet: View {
             Button("Choose from Library") { photoSource = .library }
             Button("Cancel", role: .cancel) {}
         }
+        .confirmationDialog("Maintenance Type", isPresented: $showTypeDialog, titleVisibility: .visible) {
+            ForEach(MaintenanceType.allCases, id: \.self) { t in
+                Button(t.displayName) { type = t }
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .confirmationDialog("Bike", isPresented: $showBikeDialog, titleVisibility: .visible) {
+            Button("No specific bike") { selectedBikeID = nil }
+            ForEach(garageStore.bikes.filter { !$0.effectiveIsArchived }) { bike in
+                Button(bike.title) { selectedBikeID = bike.id }
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .confirmationDialog("Reminder", isPresented: $showReminderDialog, titleVisibility: .visible) {
+            ForEach(reminderOptions.indices, id: \.self) { i in
+                Button(reminderOptions[i].label) { reminderMiles = reminderOptions[i].miles }
+            }
+            Button("Cancel", role: .cancel) { }
+        }
         .sheet(item: $photoSource) { src in
             UIKitImagePicker(sourceType: src.sourceType) { receiptPhoto = $0 }
                 .ignoresSafeArea()
@@ -626,3 +576,38 @@ struct EditMaintenanceSheet: View {
     }
 }
 
+
+// MARK: - DropdownFieldButton
+
+/// Button-based dropdown that visually matches the field chrome used elsewhere
+/// in this app. Kept intentionally as a `Button` (not a `Menu`) because in
+/// iOS 26 SwiftUI `Menu` gestures inside nested sheets are held by the sheet's
+/// drag-to-dismiss arbitration and require a second tap. Buttons never hit
+/// this gate — pair with `.confirmationDialog(_:isPresented:)` at the call site.
+struct DropdownFieldButton: View {
+    let selectionText: String
+    var leadingIcon: String? = nil
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                if let leadingIcon {
+                    Image(systemName: leadingIcon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.appAccent)
+                }
+                Text(selectionText)
+                    .foregroundStyle(Color.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.textSecondary)
+            }
+            .appFieldChrome()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
