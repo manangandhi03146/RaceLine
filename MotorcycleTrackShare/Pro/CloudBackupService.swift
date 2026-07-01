@@ -1,18 +1,21 @@
 import Foundation
 
 /// User-visible state of the cloud backup pipeline. The Settings UI mirrors this.
+///
+/// Note: rides and bikes already sync today via `SyncService` + `CloudRideStore`
+/// + `CloudGarageStore`, with a 10-ride free cap enforced server-side. This
+/// enum reflects that reality and reserves the Pro upgrade for lifting the cap
+/// and adding coverage for maintenance + settings.
 enum CloudBackupStatus: Equatable {
-    case foundationReady        // scaffolding lives, no coverage guarantees yet
-    case active(coverage: Set<CloudBackupDomain>)
+    case active(coverage: Set<CloudBackupDomain>, freeRideCap: Int?)
     case paused
     case failed(reason: String)
 
     var displayName: String {
         switch self {
-        case .foundationReady: return "Foundation ready"
-        case .active:          return "Active"
-        case .paused:          return "Paused"
-        case .failed:          return "Attention needed"
+        case .active:  return "Active"
+        case .paused:  return "Paused"
+        case .failed:  return "Attention needed"
         }
     }
 }
@@ -33,12 +36,20 @@ enum CloudBackupDomain: String, CaseIterable, Codable {
 @MainActor
 final class CloudBackupService: ObservableObject {
 
-    @Published private(set) var status: CloudBackupStatus = .foundationReady
-    @Published private(set) var lastAttemptedAt: Date?
+    /// Server-side cap on how many rides a free account can keep in the cloud.
+    /// Enforced by a Supabase trigger; mirrored here for UI copy.
+    static let freeRideCap: Int = 10
 
-    /// Which domains the foundation currently observes. Not all of these are
-    /// fully synced yet — see the UI copy for what's live vs pending.
-    let observedDomains: [CloudBackupDomain] = CloudBackupDomain.allCases
+    /// Which domains currently sync end-to-end for free users. Rides and bikes
+    /// are already live via the existing sync stack; maintenance + settings
+    /// stay pending until Pro lands.
+    static let coveredDomainsForFree: Set<CloudBackupDomain> = [.rides, .bikes]
+
+    @Published private(set) var status: CloudBackupStatus = .active(
+        coverage: CloudBackupService.coveredDomainsForFree,
+        freeRideCap: CloudBackupService.freeRideCap
+    )
+    @Published private(set) var lastAttemptedAt: Date?
 
     // MARK: - Status control
 
@@ -47,7 +58,8 @@ final class CloudBackupService: ObservableObject {
     }
 
     func markResumed() {
-        status = .foundationReady
+        status = .active(coverage: Self.coveredDomainsForFree,
+                         freeRideCap: Self.freeRideCap)
     }
 
     /// Called by higher-level sync code when a run finishes. Kept generic so
@@ -55,13 +67,14 @@ final class CloudBackupService: ObservableObject {
     func recordAttempt(succeeded: Bool, reason: String? = nil) {
         lastAttemptedAt = Date()
         if succeeded {
-            status = .active(coverage: Set(observedDomains))
+            status = .active(coverage: Self.coveredDomainsForFree,
+                             freeRideCap: Self.freeRideCap)
         } else if let reason {
             status = .failed(reason: reason)
         }
     }
 
-    // TODO: Once Pro is live, expose per-domain toggles + versioned restore
-    //       flows here. Delegate the actual transport to `CloudRideStore` /
-    //       `CloudGarageStore` / new `CloudMaintenanceStore`.
+    // TODO: Once Pro is live, drop `freeRideCap` on entitled accounts, expand
+    //       covered domains to include maintenance + settings, and add
+    //       versioned restore flows here.
 }

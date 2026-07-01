@@ -193,8 +193,8 @@ struct SettingsView: View {
                               title: "Export ride data",
                               detail: "CSV, GPX, JSON from Analyze Ride")
                 proRoadmapRow(icon: "icloud.and.arrow.up",
-                              title: "Cloud backup",
-                              detail: "Foundation ready")
+                              title: "Unlimited cloud rides",
+                              detail: "Cloud sync active — free cap is \(CloudBackupService.freeRideCap) rides")
                 proRoadmapRow(icon: "square.stack.3d.up",
                               title: "Custom share cards",
                               detail: "Foundation ready — new layouts coming")

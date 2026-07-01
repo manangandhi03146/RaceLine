@@ -15,7 +15,7 @@ enum ProFeature: String, CaseIterable {
         case .unlimitedBikes:    return "Unlimited Bikes"
         case .advancedAnalytics: return "Advanced Analytics"
         case .aiRideSummary:     return "AI Ride Summaries"
-        case .cloudBackup:       return "Cloud Backup"
+        case .cloudBackup:       return "Unlimited Cloud Rides"
         case .customShareCards:  return "Custom Share Cards"
         case .exportData:        return "Export Data"
         }
@@ -26,7 +26,7 @@ enum ProFeature: String, CaseIterable {
         case .unlimitedBikes:    return "Track every bike in your stable — no cap."
         case .advancedAnalytics: return "Deeper stats, smoothness scoring, and hard-event breakdowns."
         case .aiRideSummary:     return "A rider-friendly recap of every ride, generated automatically."
-        case .cloudBackup:       return "Full-fidelity backup of every ride, bike, and maintenance record."
+        case .cloudBackup:       return "Sync every ride to the cloud without the 10-ride free cap."
         case .customShareCards:  return "Custom layouts, colors, and watermark-free share cards."
         case .exportData:        return "Export any ride to CSV, GPX, or JSON for external tools."
         }

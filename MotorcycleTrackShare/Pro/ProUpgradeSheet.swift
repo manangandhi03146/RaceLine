@@ -151,7 +151,7 @@ struct ProUpgradeSheet: View {
         case .aiRideSummary:
             return "A rider-friendly written recap of every ride, generated automatically from your telemetry."
         case .cloudBackup:
-            return "Full-fidelity backup and restore for rides, bikes, and maintenance across every device you sign in on."
+            return "Cloud sync already works today — free accounts are capped at 10 rides in the cloud. Pro lifts that cap so every ride you record stays backed up and available on any device you sign in on."
         case .customShareCards:
             return "Additional layouts, custom colors, and the option to remove the RaceLine watermark."
         case .exportData:
