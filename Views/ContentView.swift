@@ -19,6 +19,9 @@ struct ContentView: View {
     @StateObject private var maintenanceStore = MaintenanceStore()
     @StateObject private var syncService      = SyncService()
     @StateObject private var motorcycleCatalog = MotorcycleCatalogService()
+    @StateObject private var proFeatures      = ProFeatureManager()
+    @StateObject private var cloudBackup      = CloudBackupService()
+    @StateObject private var customShareCards = CustomShareCardService()
     @State private var selectedTab: Tab = .ride
 
     // Map state
@@ -95,6 +98,9 @@ struct ContentView: View {
             syncService.configure(rideStore: rideStore, garageStore: garageStore, authService: authService)
             syncService.startMonitoring()
         }
+        .environmentObject(proFeatures)
+        .environmentObject(cloudBackup)
+        .environmentObject(customShareCards)
     }
 
     // MARK: - Ride Detail Cover
@@ -850,6 +856,8 @@ private struct RideDetailScreen: View {
     @State private var showExportFailedAlert = false
     @State private var showingShareCover    = false
     @State private var shareInitialRideID: UUID?
+    @State private var showAnalyzeSheet     = false
+    @State private var showExportFormatDialog = false
 
     init(ride: SavedRide, initialPhoto: UIImage?, bikes: [GarageBike],
          onExportJSONL: (() -> URL?)?,
@@ -1031,6 +1039,8 @@ private struct RideDetailScreen: View {
                         }
                         .buttonStyle(.plain)
 
+                        analyzeRideButton
+
                         Rectangle().fill(Color.appDivider).frame(height: 1)
 
                         Text(dateTimeText(ride.createdAt))
@@ -1123,6 +1133,23 @@ private struct RideDetailScreen: View {
         .sheet(isPresented: $showExportSheet) {
             if let url = exportURL { ActivityView(activityItems: [url]) }
         }
+        .sheet(isPresented: $showAnalyzeSheet) {
+            AnalyzeRideView(
+                ride: ride,
+                telemetryURL: rideStore.telemetryURL(for: ride),
+                onRequestExport: { showExportFormatDialog = true }
+            )
+            .environmentObject(rideStore)
+            .presentationDetents([.large])
+        }
+        .confirmationDialog("Export Ride Data",
+                            isPresented: $showExportFormatDialog,
+                            titleVisibility: .visible) {
+            Button("CSV (samples)") { runExport(format: .csv) }
+            Button("GPX (route)")   { runExport(format: .gpx) }
+            Button("JSON (full ride)") { runExport(format: .json) }
+            Button("Cancel", role: .cancel) { }
+        }
         .fullScreenCover(isPresented: $showingShareCover) {
             NavigationStack {
                 ShareCardScreen(
@@ -1144,6 +1171,68 @@ private struct RideDetailScreen: View {
                     }
                 }
             }
+        }
+    }
+
+    private var analyzeRideButton: some View {
+        Button {
+            showAnalyzeSheet = true
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.appAccent.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(Color.appAccent)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Analyze Ride")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.textPrimary)
+                    Text("AI summary, deeper stats, and safety notes")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.textSecondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.textTertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Color.appSurface2)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.appAccent.opacity(0.35), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Runs a multi-format export via `RideExportService` and presents the
+    /// system share sheet on success. Falls back to the same failure alert
+    /// the legacy JSONL export uses.
+    private func runExport(format: RideExportFormat) {
+        let service = RideExportService()
+        let samplesProvider: () -> [RideSample] = {
+            guard let url = rideStore.telemetryURL(for: ride) else { return [] }
+            return RideSampleLoader.load(from: url)
+        }
+        do {
+            let url = try service.export(
+                ride: ride,
+                route: ride.route,
+                samples: samplesProvider(),
+                format: format
+            )
+            exportURL = url
+            showExportSheet = true
+        } catch {
+            showExportFailedAlert = true
         }
     }
 

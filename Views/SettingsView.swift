@@ -180,6 +180,34 @@ struct SettingsView: View {
                     .font(.caption)
             }
 
+            // RaceLine Pro roadmap — foundation is in place; features remain free
+            // during Phase 2 while StoreKit and pricing land later.
+            Section {
+                proRoadmapRow(icon: "chart.bar.xaxis",
+                              title: "Advanced analytics",
+                              detail: "Available today via Analyze Ride")
+                proRoadmapRow(icon: "text.bubble",
+                              title: "AI ride summaries",
+                              detail: "Available today via Analyze Ride")
+                proRoadmapRow(icon: "square.and.arrow.up.on.square",
+                              title: "Export ride data",
+                              detail: "CSV, GPX, JSON from Analyze Ride")
+                proRoadmapRow(icon: "icloud.and.arrow.up",
+                              title: "Cloud backup",
+                              detail: "Foundation ready")
+                proRoadmapRow(icon: "square.stack.3d.up",
+                              title: "Custom share cards",
+                              detail: "Foundation ready — new layouts coming")
+                proRoadmapRow(icon: "infinity",
+                              title: "Unlimited bikes",
+                              detail: "Free garage capped at \(ProFeatureManager.freeBikeLimit) bikes")
+            } header: {
+                Text("RaceLine Pro")
+            } footer: {
+                Text("Pro isn't ready for purchase yet. Everything you can do in the app today stays free — these rows preview what Pro will bring.")
+                    .font(.caption)
+            }
+
             // App info
             Section {
                 HStack {
@@ -217,6 +245,22 @@ struct SettingsView: View {
             }
         } message: {
             Text("Full route data includes exact GPS coordinates that can reveal your home, workplace, and frequently visited locations. Are you sure?")
+        }
+    }
+
+    private func proRoadmapRow(icon: String, title: String, detail: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.appAccent)
+                .frame(width: 22, alignment: .center)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 

@@ -14,11 +14,13 @@ struct GarageView: View {
     @ObservedObject var catalogService: MotorcycleCatalogService
     @EnvironmentObject private var authService: AuthService
     @EnvironmentObject private var rideStore: RideStore
+    @EnvironmentObject private var proFeatures: ProFeatureManager
     @AppStorage("cloudSyncEnabled") private var cloudSyncEnabled: Bool = false
 
     @State private var showAddBikeSheet = false
     @State private var addBikeErrorMessage: String?
     @State private var expandedBikeID: UUID?
+    @State private var showBikeLimitSheet = false
 
     var body: some View {
         NavigationStack {
@@ -40,7 +42,7 @@ struct GarageView: View {
                         .frame(maxWidth: .infinity)
 
                         PrimaryButton(title: "Add First Bike") {
-                            showAddBikeSheet = true
+                            attemptAddBike()
                         }
                         .padding(.horizontal, 32)
                     }
@@ -108,6 +110,14 @@ struct GarageView: View {
             } message: {
                 Text(addBikeErrorMessage ?? "The bike could not be saved.")
             }
+            .sheet(isPresented: $showBikeLimitSheet) {
+                ProUpgradeSheet(
+                    feature: .unlimitedBikes,
+                    contextTitle: "You've reached the free garage limit",
+                    contextBody: "Free RaceLine accounts can save up to \(ProFeatureManager.freeBikeLimit) bikes. Unlimited bikes will be part of RaceLine Pro when it launches — for now, remove an existing bike from your garage to add a new one."
+                )
+                .presentationDetents([.large])
+            }
             .task {
                 garageStore.load()
                 await catalogService.loadMakesIfNeeded()
@@ -171,7 +181,7 @@ struct GarageView: View {
                 .foregroundStyle(.white)
             Spacer()
             Button {
-                showAddBikeSheet = true
+                attemptAddBike()
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 20, weight: .semibold))
@@ -185,6 +195,16 @@ struct GarageView: View {
         .padding(.top, 6)
         .padding(.bottom, 4)
         .background(Color.appBg)
+    }
+
+    /// Routes bike-add attempts through the Pro feature check so free users
+    /// with 2 bikes see the non-payment heads-up sheet instead of a broken form.
+    private func attemptAddBike() {
+        if proFeatures.canAddBike(currentCount: garageStore.bikes.count) {
+            showAddBikeSheet = true
+        } else {
+            showBikeLimitSheet = true
+        }
     }
 
     @ViewBuilder
