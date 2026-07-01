@@ -23,11 +23,12 @@ Run in this exact order:
 13. `migrations/013_group_insert_policy_public.sql` — Rescopes the groups INSERT policy from `TO authenticated` to `TO public` (with `auth.uid() IS NOT NULL` inside WITH CHECK). Diagnosed after seeing PostgREST-mediated INSERTs fail RLS despite a `WITH CHECK (TRUE)` policy — the role clause wasn't matching for reasons we couldn't identify. Same practical effect (signed-in-only insertion via the trigger + WITH CHECK), just doesn't rely on the connection role name.
 14. `migrations/014_groups_full_reset.sql` — **Idempotent full reset of `groups` + `group_members`**: wipes every leftover policy/trigger/function from 006–013, re-grants table privileges to `authenticated`/`service_role`, and rebuilds the whole stack from scratch. Run this any time group creation is misbehaving — it supersedes everything above for these two tables.
 15. `migrations/015_groups_fix_recursion.sql` — Fixes 42P17 "infinite recursion detected in policy" by moving every cross-row membership check into SECURITY DEFINER helper functions (`is_group_member`, `is_group_admin`, `is_group_public`) with `row_security = off`. The policies now call the helpers instead of doing inline `EXISTS FROM group_members`, which would otherwise re-trigger the policy on the inner SELECT.
+16. `migrations/016_groups_select_owner.sql` — Adds `owner_id = auth.uid()` to the `groups_select_visible` policy so the RETURNING read from `.insert().select().single()` succeeds for private groups the caller just created. This is the migration that finally unblocked group creation end-to-end.
 
 Then:
-16. Create storage buckets manually (see below)
-17. Deploy Edge Functions (see below)
-18. Configure Auth redirect URLs (see below)
+17. Create storage buckets manually (see below)
+18. Deploy Edge Functions (see below)
+19. Configure Auth redirect URLs (see below)
 
 ---
 

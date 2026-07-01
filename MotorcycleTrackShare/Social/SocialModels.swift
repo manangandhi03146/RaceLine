@@ -207,25 +207,28 @@ struct GroupSummary: Codable, Identifiable, Equatable, Hashable {
     }
 }
 
-/// Insert payload for `groups`. Deliberately does NOT include `owner_id` —
-/// the DB has `DEFAULT auth.uid()` on that column (migration 009), so
-/// omitting it eliminates any risk of client / server auth drift causing
-/// a `WITH CHECK (owner_id = auth.uid())` mismatch (Postgres error 42501).
+/// Insert payload for `groups`. Includes `owner_id` explicitly so the
+/// RLS INSERT policy (`WITH CHECK (owner_id = auth.uid())`) and the
+/// RETURNING read from `.select().single()` both see a concrete owner
+/// tied to the current Supabase session (see migration 016).
 struct GroupInsert: Encodable {
+    let ownerID: UUID
     let name: String
     let description: String?
     let isPublic: Bool
     let joinCode: String
 
     enum CodingKeys: String, CodingKey {
+        case ownerID = "owner_id"
         case name
         case description
-        case isPublic   = "is_public"
-        case joinCode   = "join_code"
+        case isPublic = "is_public"
+        case joinCode = "join_code"
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(ownerID.uuidString.lowercased(), forKey: .ownerID)
         try c.encode(name, forKey: .name)
         if let description { try c.encode(description, forKey: .description) }
         try c.encode(isPublic, forKey: .isPublic)

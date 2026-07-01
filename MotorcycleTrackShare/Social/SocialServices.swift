@@ -208,15 +208,24 @@ struct GroupService {
     func createGroup(name: String, description: String?, isPublic: Bool) async throws -> GroupSummary {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard name.count >= 2 else { throw SocialError.validation("Group name is too short.") }
-        guard client.auth.currentUser != nil else {
+        let session: Session
+        do {
+            session = try await client.auth.session
+        } catch {
+            print("No Supabase session:", error)
             throw SocialError.notSignedIn
         }
+
+        print("Supabase session user id:", session.user.id.uuidString)
+
         let payload = GroupInsert(
+            ownerID: session.user.id,
             name: name,
             description: description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
             isPublic: isPublic,
             joinCode: Self.generateJoinCode()
         )
+
         return try await client
             .from(SocialTable.groups)
             .insert(payload)
