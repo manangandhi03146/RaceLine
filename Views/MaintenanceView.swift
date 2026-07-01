@@ -219,7 +219,9 @@ struct AddMaintenanceSheet: View {
                                         .foregroundStyle(Color.textSecondary)
                                 }
                                 .appFieldChrome()
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
                         }
 
                         if type == .custom {
@@ -257,7 +259,9 @@ struct AddMaintenanceSheet: View {
                                             .foregroundStyle(Color.textSecondary)
                                     }
                                     .appFieldChrome()
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
 
@@ -293,7 +297,9 @@ struct AddMaintenanceSheet: View {
                                         .foregroundStyle(Color.textSecondary)
                                 }
                                 .appFieldChrome()
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
                         }
 
                         AppFieldGroup(label: "RECEIPT PHOTO (OPTIONAL)") {
@@ -320,6 +326,7 @@ struct AddMaintenanceSheet: View {
                                         }
                                     }
                                 }
+                                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
                             .buttonStyle(.plain)
                         }
@@ -473,7 +480,9 @@ struct EditMaintenanceSheet: View {
                                         .foregroundStyle(Color.textSecondary)
                                 }
                                 .appFieldChrome()
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
                         }
 
                         if type == .custom {
@@ -509,7 +518,9 @@ struct EditMaintenanceSheet: View {
                                             .foregroundStyle(Color.textSecondary)
                                     }
                                     .appFieldChrome()
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
 
@@ -544,7 +555,9 @@ struct EditMaintenanceSheet: View {
                                         .foregroundStyle(Color.textSecondary)
                                 }
                                 .appFieldChrome()
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
                         }
 
                         AppFieldGroup(label: "RECEIPT PHOTO (OPTIONAL)") {

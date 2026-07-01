@@ -685,6 +685,7 @@ private struct GarageBikeDetailScreen: View {
                     }
                 }
             }
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -830,6 +831,7 @@ private struct BikeMaintenanceSection: View {
                 .padding(.vertical, 6)
                 .background(Color.appAccent.opacity(0.12))
                 .clipShape(Capsule())
+                .contentShape(Capsule())
             }
             .buttonStyle(.plain)
         }
@@ -1039,20 +1041,25 @@ private struct EditBikeSheet: View {
                                     }
                                 }
                             }
+                            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(.plain)
 
                         Spacer(minLength: 4)
 
-                        Button("Delete Bike") {
+                        Button {
                             showDeleteConfirm = true
+                        } label: {
+                            Text("Delete Bike")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .background(Color.red.opacity(0.85))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .background(Color.red.opacity(0.85))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .buttonStyle(.plain)
                     }
                     .padding(16)
                 }
@@ -1157,6 +1164,7 @@ private struct CatalogPickerRow: View {
                     .foregroundStyle(Color.appAccent)
             }
             .appFieldChrome()
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -1188,6 +1196,7 @@ private struct CatalogPickerButton: View {
             .padding(.vertical, 10)
             .background(Color.appSurface2)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
