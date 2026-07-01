@@ -221,7 +221,6 @@ struct AddMaintenanceSheet: View {
                                 .appFieldChrome()
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
                         }
 
                         if type == .custom {
@@ -299,7 +298,6 @@ struct AddMaintenanceSheet: View {
                                 .appFieldChrome()
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
                         }
 
                         AppFieldGroup(label: "RECEIPT PHOTO (OPTIONAL)") {
@@ -482,7 +480,6 @@ struct EditMaintenanceSheet: View {
                                 .appFieldChrome()
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
                         }
 
                         if type == .custom {
@@ -557,7 +554,6 @@ struct EditMaintenanceSheet: View {
                                 .appFieldChrome()
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
                         }
 
                         AppFieldGroup(label: "RECEIPT PHOTO (OPTIONAL)") {

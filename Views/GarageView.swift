@@ -778,6 +778,9 @@ private struct BikeMaintenanceSection: View {
                 },
                 onCancel: { showAddSheet = false }
             )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
+            .interactiveDismissDisabled(true)
         }
         .sheet(item: $editingRecord) { record in
             EditMaintenanceSheet(
@@ -807,6 +810,9 @@ private struct BikeMaintenanceSection: View {
             } onCancel: {
                 editingRecord = nil
             }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
+            .interactiveDismissDisabled(true)
         }
     }
 
