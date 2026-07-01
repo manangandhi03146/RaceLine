@@ -1,190 +1,14 @@
 import SwiftUI
 import UIKit
 
-struct MaintenanceView: View {
-    @ObservedObject var maintenanceStore: MaintenanceStore
-    @ObservedObject var garageStore: GarageStore
-
-    @State private var showAddSheet = false
-    @State private var editingRecord: MaintenanceRecord?
-    @State private var selectedBikeFilter: UUID? = nil
-
-    private var filteredRecords: [MaintenanceRecord] {
-        let active = maintenanceStore.records.filter { !$0.effectiveIsArchived }
-        guard let filterID = selectedBikeFilter else { return active }
-        return active.filter { $0.bikeID == filterID }
-    }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Due soon banner
-                    let dueSoon = maintenanceStore.dueSoonRecords(withinDays: 14)
-                    if !dueSoon.isEmpty {
-                        dueSoonBanner(dueSoon)
-                            .padding(.horizontal, 12)
-                            .padding(.top, 12)
-                    }
-
-                    // Bike filter
-                    if garageStore.bikes.count > 1 {
-                        bikeFilterRow
-                            .padding(.horizontal, 12)
-                            .padding(.top, 12)
-                    }
-
-                    if filteredRecords.isEmpty {
-                        EmptyStateView(
-                            icon: "wrench.and.screwdriver",
-                            title: "No Maintenance Records",
-                            message: "Log an oil change, tire swap, or any service to track your bike's health."
-                        )
-                        .padding(.top, 40)
-                    } else {
-                        LazyVStack(spacing: 8) {
-                            ForEach(filteredRecords) { record in
-                                MaintenanceRecordRow(
-                                    record: record,
-                                    bikeName: bikeName(for: record.bikeID),
-                                    receiptURL: maintenanceStore.receiptPhotoURL(for: record)
-                                ) {
-                                    editingRecord = record
-                                } onDelete: {
-                                    _ = maintenanceStore.deleteRecord(id: record.id)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.top, 12)
-                        .padding(.bottom, 120)
-                    }
-                }
-            }
-            .safeAreaInset(edge: .top, spacing: 0) { maintenanceHeader }
-            .background(Color.appBg)
-            .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showAddSheet) {
-                AddMaintenanceSheet(garageStore: garageStore) { record, photo in
-                    _ = maintenanceStore.addRecord(record, photo: photo)
-                    showAddSheet = false
-                } onCancel: {
-                    showAddSheet = false
-                }
-            }
-            .sheet(item: $editingRecord) { record in
-                EditMaintenanceSheet(
-                    record: record,
-                    receiptURL: maintenanceStore.receiptPhotoURL(for: record),
-                    garageStore: garageStore
-                ) { updated, photo in
-                    var finalRecord = updated
-                    if let photo,
-                       let data = photo.jpegData(compressionQuality: 0.8) {
-                        // Write photo ourselves since updateRecord doesn't handle it
-                        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                        let folder = docs.appendingPathComponent("maintenance/\(record.id.uuidString)")
-                        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                        try? data.write(to: folder.appendingPathComponent("receipt.jpg"), options: [.atomic])
-                        finalRecord = MaintenanceRecord(
-                            id: updated.id, createdAt: updated.createdAt, bikeID: updated.bikeID,
-                            type: updated.type, title: updated.title, date: updated.date,
-                            odometerMiles: updated.odometerMiles, notes: updated.notes,
-                            reminderIntervalDays: updated.reminderIntervalDays,
-                            reminderIntervalMiles: updated.reminderIntervalMiles,
-                            receiptPhotoFilename: "receipt.jpg", isArchived: updated.isArchived,
-                            remoteID: updated.remoteID, syncStatus: updated.syncStatus
-                        )
-                    }
-                    _ = maintenanceStore.updateRecord(finalRecord)
-                    editingRecord = nil
-                } onCancel: {
-                    editingRecord = nil
-                }
-            }
-        }
-    }
-
-    private var maintenanceHeader: some View {
-        HStack {
-            Text("Maintenance")
-                .font(.system(size: 34, weight: .bold))
-                .foregroundStyle(.white)
-            Spacer()
-            Button { showAddSheet = true } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color.appAccent)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 6)
-        .padding(.bottom, 4)
-        .background(Color.appBg)
-    }
-
-    @ViewBuilder
-    private func dueSoonBanner(_ records: [MaintenanceRecord]) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .font(.system(size: 16))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(records.count) item\(records.count == 1 ? "" : "s") due soon")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.textPrimary)
-                Text(records.prefix(2).map(\.title).joined(separator: ", "))
-                    .font(.caption)
-                    .foregroundStyle(Color.textSecondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-        }
-        .padding(12)
-        .background(Color.orange.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    private var bikeFilterRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                filterChip(label: "All", id: nil)
-                ForEach(garageStore.bikes.filter { !$0.effectiveIsArchived }) { bike in
-                    filterChip(label: bike.title, id: bike.id)
-                }
-            }
-            .padding(.vertical, 2)
-        }
-    }
-
-    private func filterChip(label: String, id: UUID?) -> some View {
-        let isSelected = selectedBikeFilter == id
-        return Button { selectedBikeFilter = id } label: {
-            Text(label)
-                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                .foregroundStyle(isSelected ? .white : Color.textSecondary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .frame(minHeight: 36)
-                .background(isSelected ? Color.appAccent : Color.appSurface2)
-                .clipShape(Capsule())
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func bikeName(for bikeID: UUID?) -> String? {
-        guard let bikeID else { return nil }
-        return garageStore.bikes.first(where: { $0.id == bikeID })?.title
-    }
-}
+// Maintenance was previously a top-level tab; it now lives inside each bike's
+// detail screen (see `BikeMaintenanceSection` in GarageView). The reusable
+// pieces below — MaintenanceRecordRow, AddMaintenanceSheet, EditMaintenanceSheet —
+// stay here so they can be shared across the app.
 
 // MARK: - Record Row
 
-private struct MaintenanceRecordRow: View {
+struct MaintenanceRecordRow: View {
     let record: MaintenanceRecord
     let bikeName: String?
     let receiptURL: URL?
@@ -293,8 +117,12 @@ private struct MaintenanceRecordRow: View {
 
 // MARK: - Add Sheet
 
-private struct AddMaintenanceSheet: View {
+struct AddMaintenanceSheet: View {
     @ObservedObject var garageStore: GarageStore
+    /// When non-nil, the sheet is scoped to this bike: the bike picker is
+    /// hidden and every new record is attached to this bikeID. Used from
+    /// `GarageBikeDetailScreen` where the bike context is already known.
+    let presetBikeID: UUID?
     let onSave: (MaintenanceRecord, UIImage?) -> Void
     let onCancel: () -> Void
 
@@ -308,6 +136,17 @@ private struct AddMaintenanceSheet: View {
     @State private var receiptPhoto: UIImage?
     @State private var showPhotoDialog = false
     @State private var photoSource: PhotoPickerSource?
+
+    init(garageStore: GarageStore,
+         presetBikeID: UUID? = nil,
+         onSave: @escaping (MaintenanceRecord, UIImage?) -> Void,
+         onCancel: @escaping () -> Void) {
+        self.garageStore = garageStore
+        self.presetBikeID = presetBikeID
+        self.onSave = onSave
+        self.onCancel = onCancel
+        _selectedBikeID = State(initialValue: presetBikeID)
+    }
 
     private enum PhotoPickerSource: String, Identifiable {
         case camera, library
@@ -399,7 +238,9 @@ private struct AddMaintenanceSheet: View {
                                 .appFieldChrome()
                         }
 
-                        if !garageStore.bikes.isEmpty {
+                        // Bike picker is only rendered when the caller hasn't
+                        // pre-scoped the sheet to a specific bike.
+                        if presetBikeID == nil, !garageStore.bikes.isEmpty {
                             AppFieldGroup(label: "BIKE") {
                                 Menu {
                                     Button("No specific bike") { selectedBikeID = nil }
@@ -523,7 +364,7 @@ private struct AddMaintenanceSheet: View {
 
 // MARK: - Edit Sheet
 
-private struct EditMaintenanceSheet: View {
+struct EditMaintenanceSheet: View {
     let record: MaintenanceRecord
     let receiptURL: URL?
     @ObservedObject var garageStore: GarageStore

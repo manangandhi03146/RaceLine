@@ -4,7 +4,7 @@ import UIKit
 
 struct ContentView: View {
     private enum Tab: Hashable {
-        case calendar, ride, garage, maintenance, profile
+        case calendar, ride, garage, social, profile
     }
 
     @EnvironmentObject private var authService: AuthService
@@ -62,8 +62,9 @@ struct ContentView: View {
             } else if selectedTab == .garage {
                 GarageView(garageStore: garageStore, catalogService: motorcycleCatalog)
                     .environmentObject(rideStore)
-            } else if selectedTab == .maintenance {
-                MaintenanceView(maintenanceStore: maintenanceStore, garageStore: garageStore)
+                    .environmentObject(maintenanceStore)
+            } else if selectedTab == .social {
+                SocialFeedView()
             } else if selectedTab == .profile {
                 NavigationStack {
                     ProfileView()
@@ -671,8 +672,8 @@ struct ContentView: View {
 
     private var bottomNavigationBar: some View {
         HStack(spacing: 0) {
-            navBarButton(title: "Service", tab: .maintenance) { isActive in
-                Image(systemName: "wrench.and.screwdriver")
+            navBarButton(title: "Social", tab: .social) { isActive in
+                Image(systemName: "person.2.fill")
                     .font(.system(size: 20, weight: isActive ? .semibold : .regular))
                     .frame(height: 22)
             }
