@@ -82,16 +82,51 @@ struct SocialProfileService {
         "\(userID.uuidString.lowercased())/avatar.jpg"
     }
 
-    /// Uploads a new avatar for `userID` and returns the storage path so
-    /// the caller can persist it on the profile row. Uses the shared
-    /// `CloudStorageService` upload helper (JPEG + upsert).
+    /// Uploads a new avatar for the current session and returns the storage
+    /// path so the caller can persist it on the profile row.
+    ///
+    /// We do a raw URLSession PUT with an explicit Bearer of the session's
+    /// access token rather than routing through `client.storage.upload(...)`.
+    /// The SDK's storage upload was returning HTTP 400 with a Postgres RLS
+    /// violation, which we tracked down to the JWT not always making it to
+    /// storage.objects during INSERT. Hitting the storage REST endpoint
+    /// directly with an explicit Authorization header removes that ambiguity.
     func uploadAvatar(_ image: UIImage, userID: UUID) async throws -> String {
-        let path = Self.avatarStoragePath(userID: userID)
-        try await CloudStorageService().uploadPhoto(
-            image,
-            path: path,
-            bucket: Self.avatarBucket
-        )
+        let session: Session
+        do {
+            session = try await client.auth.session
+        } catch {
+            throw SocialError.notSignedIn
+        }
+        let sessionUID = session.user.id
+        let path = Self.avatarStoragePath(userID: sessionUID)
+
+        guard let jpegData = image.jpegData(compressionQuality: 0.8) else {
+            throw SocialError.validation("Couldn't compress the image.")
+        }
+
+        let base = SupabaseConfig.projectURL.absoluteString
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(base)/storage/v1/object/\(Self.avatarBucket)/\(path)") else {
+            throw SocialError.validation("Bad avatar URL.")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("true", forHTTPHeaderField: "x-upsert")
+
+        let (data, response) = try await URLSession.shared.upload(for: request, from: jpegData)
+        guard let http = response as? HTTPURLResponse else {
+            throw SocialError.unknown
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            print("Avatar upload failed:", http.statusCode, body)
+            throw SocialError.validation("Upload failed (\(http.statusCode)): \(body)")
+        }
         return path
     }
 

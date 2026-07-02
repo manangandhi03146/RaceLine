@@ -522,10 +522,20 @@ struct ProfileView: View {
     // MARK: - Avatar pick / upload
 
     private func handleAvatarPick(_ item: PhotosPickerItem?) async {
-        guard let item, let uid = authService.userID else { return }
+        guard let item else { return }
+        guard let uid = authService.userID else {
+            profileError = "Sign in first before changing your avatar."
+            return
+        }
         do {
-            guard let data = try await item.loadTransferable(type: Data.self),
-                  let image = UIImage(data: data) else { return }
+            guard let data = try await item.loadTransferable(type: Data.self) else {
+                profileError = "Couldn't read that image. Pick a different photo."
+                return
+            }
+            guard let image = UIImage(data: data) else {
+                profileError = "Couldn't decode that image. Try a JPEG or PNG."
+                return
+            }
             // Downscale to keep uploads snappy.
             let resized = image.resized(toMaxDimension: 512) ?? image
             localAvatarImage = resized
@@ -539,8 +549,12 @@ struct ProfileView: View {
                 SocialProfileUpdate(avatarPath: path)
             )
             socialProfile = updated
+            profileError = nil
+        } catch let e as SocialError {
+            profileError = e.errorDescription
         } catch {
-            profileError = "Couldn't upload avatar. Try again."
+            profileError = "Couldn't upload avatar: \(error.localizedDescription)"
+            print("Avatar upload error:", error)
         }
     }
 
