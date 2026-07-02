@@ -64,14 +64,7 @@ struct PublicProfileView: View {
 
     private func heroCard(_ profile: SocialProfile) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(Color.appAccent.opacity(0.15))
-                    .frame(width: 60, height: 60)
-                Image(systemName: "person.fill")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(Color.appAccent)
-            }
+            avatarView(for: profile)
             Text(profile.displayName ?? profile.username ?? "Rider")
                 .font(.system(size: 24, weight: .bold))
                 .foregroundStyle(Color.textPrimary)
@@ -88,6 +81,34 @@ struct PublicProfileView: View {
             }
         }
         .minimalCard()
+    }
+
+    @ViewBuilder
+    private func avatarView(for profile: SocialProfile) -> some View {
+        ZStack {
+            Circle()
+                .fill(Color.appAccent.opacity(0.15))
+                .frame(width: 60, height: 60)
+            if let path = profile.avatarPath,
+               let url  = profileService.avatarPublicURL(path: path) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(Color.appAccent)
+                    }
+                }
+                .frame(width: 60, height: 60)
+                .clipShape(Circle())
+            } else {
+                Image(systemName: "person.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+            }
+        }
     }
 
     @ViewBuilder
@@ -152,138 +173,6 @@ struct PublicProfileView: View {
             }
         } catch {
             errorMessage = "Couldn't update follow."
-        }
-    }
-}
-
-// MARK: - Edit own profile
-
-struct EditOwnProfileView: View {
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var authService: AuthService
-
-    @State private var username = ""
-    @State private var displayName = ""
-    @State private var bio = ""
-    @State private var isPublic = false
-    @State private var showBikes = false
-    @State private var showRideStats = true
-    @State private var saving = false
-    @State private var loading = true
-    @State private var errorMessage: String?
-
-    private let service = SocialProfileService()
-
-    var body: some View {
-        ZStack {
-            Color.appBg.ignoresSafeArea()
-            VStack(spacing: 0) {
-                AppSheetHeader(
-                    title: "Public Profile",
-                    onCancel: { dismiss() },
-                    isSaveDisabled: saving || loading,
-                    onSave: { Task { await save() } }
-                )
-                if loading {
-                    LoadingBlock(message: "Loading profile…")
-                    Spacer()
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("Only fields you turn on are visible to other riders. Private info such as email, sign-in provider, and exact ride routes are never shared.")
-                                .font(.caption)
-                                .foregroundStyle(Color.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            AppFieldGroup(label: "USERNAME") {
-                                TextField("", text: $username, prompt: .appPrompt("racer_42"))
-                                    .foregroundStyle(Color.textPrimary)
-                                    .autocorrectionDisabled()
-                                    .textInputAutocapitalization(.never)
-                                    .appFieldChrome()
-                            }
-                            AppFieldGroup(label: "DISPLAY NAME") {
-                                TextField("", text: $displayName, prompt: .appPrompt("Your rider name"))
-                                    .foregroundStyle(Color.textPrimary)
-                                    .appFieldChrome()
-                            }
-                            AppFieldGroup(label: "BIO") {
-                                TextField("", text: $bio,
-                                          prompt: .appPrompt("Sport-touring in the PNW"),
-                                          axis: .vertical)
-                                    .lineLimit(3, reservesSpace: true)
-                                    .foregroundStyle(Color.textPrimary)
-                                    .appFieldChrome()
-                            }
-
-                            Toggle("Make my profile public", isOn: $isPublic)
-                                .tint(Color.appAccent)
-                                .foregroundStyle(Color.textPrimary)
-                                .appFieldChrome()
-                            Toggle("Show my bikes on my profile", isOn: $showBikes)
-                                .tint(Color.appAccent)
-                                .foregroundStyle(Color.textPrimary)
-                                .appFieldChrome()
-                                .disabled(!isPublic)
-                            Toggle("Show my ride stats on my profile", isOn: $showRideStats)
-                                .tint(Color.appAccent)
-                                .foregroundStyle(Color.textPrimary)
-                                .appFieldChrome()
-                                .disabled(!isPublic)
-
-                            if let errorMessage {
-                                Text(errorMessage)
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.red)
-                            }
-                        }
-                        .padding(20)
-                    }
-                }
-            }
-        }
-        .task { await load() }
-    }
-
-    private func load() async {
-        guard let uid = authService.userID else {
-            loading = false
-            errorMessage = "Sign in first."
-            return
-        }
-        defer { loading = false }
-        do {
-            let profile = try await service.fetchProfile(userID: uid)
-            username = profile?.username ?? ""
-            displayName = profile?.displayName ?? ""
-            bio = profile?.bio ?? ""
-            isPublic = profile?.isPublic ?? false
-            showBikes = profile?.showBikes ?? false
-            showRideStats = profile?.showRideStats ?? true
-        } catch {
-            errorMessage = "Couldn't load your profile."
-        }
-    }
-
-    private func save() async {
-        guard let uid = authService.userID else { return }
-        saving = true
-        defer { saving = false }
-        do {
-            _ = try await service.updateProfile(userID: uid, SocialProfileUpdate(
-                username: username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().isEmpty ? nil : username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-                displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : displayName.trimmingCharacters(in: .whitespacesAndNewlines),
-                bio: bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : bio.trimmingCharacters(in: .whitespacesAndNewlines),
-                avatarPath: nil,
-                isPublic: isPublic,
-                showBikes: showBikes,
-                showRideStats: showRideStats
-            ))
-            dismiss()
-        } catch let e as SocialError {
-            errorMessage = e.errorDescription
-        } catch {
-            errorMessage = "Couldn't save profile."
         }
     }
 }

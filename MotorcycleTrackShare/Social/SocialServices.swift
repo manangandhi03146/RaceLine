@@ -1,5 +1,6 @@
 import Foundation
 import Supabase
+import UIKit
 
 // MARK: - Table constants
 
@@ -67,6 +68,39 @@ struct SocialProfileService {
             .in("id", values: ids)
             .execute()
             .value
+    }
+
+    // MARK: - Avatar
+
+    /// Bucket used for avatars. Must exist as a PUBLIC bucket in the
+    /// Supabase Dashboard (migration 018 sets up the storage policies).
+    static let avatarBucket = "avatars"
+
+    /// Stable path for a user's avatar. Overwriting the same path lets
+    /// us skip juggling multiple filenames when the user re-uploads.
+    static func avatarStoragePath(userID: UUID) -> String {
+        "\(userID.uuidString.lowercased())/avatar.jpg"
+    }
+
+    /// Uploads a new avatar for `userID` and returns the storage path so
+    /// the caller can persist it on the profile row. Uses the shared
+    /// `CloudStorageService` upload helper (JPEG + upsert).
+    func uploadAvatar(_ image: UIImage, userID: UUID) async throws -> String {
+        let path = Self.avatarStoragePath(userID: userID)
+        try await CloudStorageService().uploadPhoto(
+            image,
+            path: path,
+            bucket: Self.avatarBucket
+        )
+        return path
+    }
+
+    /// Public URL for the given avatar path. The `avatars` bucket is
+    /// configured PUBLIC so no signed URL is required.
+    func avatarPublicURL(path: String) -> URL? {
+        try? client.storage
+            .from(Self.avatarBucket)
+            .getPublicURL(path: path)
     }
 
     /// Case-insensitive search by username/display_name for public profiles.

@@ -28,13 +28,13 @@ struct SocialProfile: Codable, Identifiable, Equatable, Hashable {
 }
 
 struct SocialProfileUpdate: Encodable {
-    var username: String?
-    var displayName: String?
-    var bio: String?
-    var avatarPath: String?
-    var isPublic: Bool?
-    var showBikes: Bool?
-    var showRideStats: Bool?
+    var username: String? = nil
+    var displayName: String? = nil
+    var bio: String? = nil
+    var avatarPath: String? = nil
+    var isPublic: Bool? = nil
+    var showBikes: Bool? = nil
+    var showRideStats: Bool? = nil
 
     enum CodingKeys: String, CodingKey {
         case username
