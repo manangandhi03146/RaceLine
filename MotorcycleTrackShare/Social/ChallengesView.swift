@@ -162,7 +162,13 @@ struct ChallengeDetailView: View {
     @State private var errorMessage: String?
     @State private var joining = false
 
+    @State private var leaderboard: [ChallengeProgress] = []
+    @State private var leaderboardProfiles: [UUID: SocialProfile] = [:]
+    @State private var leaderboardLoading = true
+
     private let service = ChallengeService()
+    private let followService = FollowService()
+    private let profileService = SocialProfileService()
 
     var body: some View {
         ScrollView {
@@ -172,6 +178,7 @@ struct ChallengeDetailView: View {
                     progressCard(progress)
                 }
                 joinButton
+                leaderboardSection
                 safetyNote
                 if let errorMessage {
                     Text(errorMessage)
@@ -187,6 +194,93 @@ struct ChallengeDetailView: View {
         .toolbarBackground(Color.appSurface, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .task { await loadProgress() }
+        .task { await loadLeaderboard() }
+    }
+
+    // MARK: - Leaderboard
+
+    private var leaderboardSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "person.2.fill")
+                    .foregroundStyle(Color.appAccent)
+                Text("FRIENDS LEADERBOARD")
+                    .font(.system(size: 11, weight: .semibold))
+                    .kerning(0.6)
+                    .foregroundStyle(Color.textGhost)
+                Spacer()
+            }
+
+            if leaderboardLoading {
+                LoadingBlock(message: "Loading leaderboard…")
+            } else if leaderboard.isEmpty {
+                EmptyStateView(
+                    icon: "person.2.slash",
+                    title: "No mutuals here yet",
+                    message: "Only riders you and they both follow show up on this leaderboard. Add a few mutuals from the Riders tab."
+                )
+            } else {
+                ForEach(Array(leaderboard.enumerated()), id: \.element.id) { pair in
+                    leaderboardRow(rank: pair.offset + 1, entry: pair.element)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .minimalCard()
+    }
+
+    private func leaderboardRow(rank: Int, entry: ChallengeProgress) -> some View {
+        let profile = leaderboardProfiles[entry.userID]
+        let isSelf  = entry.userID == authService.userID
+        let name: String = {
+            if isSelf { return "You" }
+            if let name = profile?.displayName, !name.isEmpty { return name }
+            if let u = profile?.username, !u.isEmpty { return "@\(u)" }
+            return "Rider"
+        }()
+        return HStack(spacing: 12) {
+            Text("\(rank)")
+                .font(.system(size: 13, weight: .bold).monospacedDigit())
+                .foregroundStyle(rank <= 3 ? Color.appAccent : Color.textSecondary)
+                .frame(width: 22, alignment: .trailing)
+            Text(name)
+                .font(.system(size: 14, weight: isSelf ? .semibold : .regular))
+                .foregroundStyle(Color.textPrimary)
+                .lineLimit(1)
+            Spacer()
+            Text(String(format: "%.0f %@", entry.currentValue, challenge.goalUnit))
+                .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                .foregroundStyle(Color.textSecondary)
+            if entry.completedAt != nil {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(Color.green)
+                    .font(.system(size: 12))
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func loadLeaderboard() async {
+        guard let uid = authService.userID else {
+            leaderboardLoading = false
+            return
+        }
+        defer { leaderboardLoading = false }
+        do {
+            let mutuals = try await followService.mutuals(userID: uid)
+            let rows = try await service.leaderboard(challengeID: challenge.id,
+                                                     viewerID: uid,
+                                                     mutuals: mutuals)
+            let sorted = rows.sorted { $0.currentValue > $1.currentValue }
+            leaderboard = sorted
+            let ids = Array(Set(sorted.map(\.userID)))
+            if !ids.isEmpty,
+               let profiles = try? await profileService.fetchProfiles(userIDs: ids) {
+                leaderboardProfiles = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+            }
+        } catch {
+            leaderboard = []
+        }
     }
 
     private var heroCard: some View {
@@ -275,16 +369,6 @@ struct ChallengeDetailView: View {
         do {
             let updated = try await service.joinChallenge(userID: uid, challengeID: challenge.id)
             progress = updated
-            _ = try? await ActivityFeedService().emit(ActivityEventInsert(
-                actorID: uid,
-                kind: .challengeJoined,
-                subjectID: challenge.id,
-                subjectKind: "challenge",
-                title: "Joined a challenge",
-                summary: challenge.title,
-                visibility: .followers,
-                groupID: challenge.groupID
-            ))
         } catch {
             errorMessage = "Couldn't join right now."
         }

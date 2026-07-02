@@ -94,6 +94,10 @@ struct GarageView: View {
                                     }
                                 }
                             }
+                            if let userID = authService.userID {
+                                let addedBike = bike
+                                Task { await Self.emitBikeAddedActivity(userID: userID, bike: addedBike) }
+                            }
                         case .writeFailed:
                             addBikeErrorMessage = "The bike could not be saved."
                         }
@@ -208,6 +212,26 @@ struct GarageView: View {
         } else {
             showBikeLimitSheet = true
         }
+    }
+
+    /// Best-effort emit of a `bikeAdded` activity so the user's followers
+    /// see the new bike in their feed. Never blocks the save flow.
+    static func emitBikeAddedActivity(userID: UUID, bike: GarageBike) async {
+        let summary: String = {
+            let year = bike.year.map { "\($0) " } ?? ""
+            let spec = "\(year)\(bike.make) \(bike.model)".trimmingCharacters(in: .whitespaces)
+            return spec.isEmpty ? bike.nickname : spec
+        }()
+        try? await ActivityFeedService().emit(ActivityEventInsert(
+            actorID: userID,
+            kind: .bikeAdded,
+            subjectID: bike.id,
+            subjectKind: "bike",
+            title: "Added a new bike",
+            summary: summary,
+            visibility: .followers,
+            groupID: nil
+        ))
     }
 
     @ViewBuilder

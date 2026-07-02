@@ -261,70 +261,237 @@ struct ChallengesTab: View {
     var body: some View { ChallengesView() }
 }
 
-// MARK: - Riders tab (search + follow)
+// MARK: - Riders tab (mutual followers list + add sheet)
 
+/// Main Riders page shows the current user's actual friends — riders they
+/// mutually follow. The plus button in the top-right opens a search sheet
+/// where the user can search + follow more people. Discovery lives inside
+/// that sheet, not on the main page (per product spec).
 struct RidersTab: View {
     @EnvironmentObject private var authService: AuthService
 
-    @State private var query: String = ""
-    @State private var results: [SocialProfile] = []
-    @State private var searching = false
-    @State private var errorMessage: String?
+    @State private var mutuals: [SocialProfile] = []
     @State private var followingIDs: Set<UUID> = []
+    @State private var state: LoadState = .loading
+    @State private var showAddSheet = false
 
     private let profileService = SocialProfileService()
-    private let followService = FollowService()
+    private let followService  = FollowService()
+
+    private enum LoadState: Equatable { case loading, loaded, empty, error(String) }
 
     var body: some View {
-        VStack(spacing: 12) {
-            searchField
+        VStack(spacing: 0) {
+            actionBar
                 .padding(.horizontal, 12)
                 .padding(.top, 10)
 
             ScrollView {
                 LazyVStack(spacing: 10) {
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.textSecondary)
-                            .padding()
-                    }
-
-                    if searching {
-                        LoadingBlock(message: "Searching…")
-                            .padding(.top, 20)
-                    } else if !query.trimmingCharacters(in: .whitespaces).isEmpty && results.isEmpty {
-                        EmptyStateView(
-                            icon: "magnifyingglass",
-                            title: "No riders found",
-                            message: "Only riders with a public profile show up in search."
-                        )
-                        .padding(.top, 20)
-                    } else if results.isEmpty {
+                    switch state {
+                    case .loading:
+                        LoadingBlock(message: "Loading friends…")
+                            .padding(.top, 40)
+                    case .empty:
                         EmptyStateView(
                             icon: "person.2",
-                            title: "Find fellow riders",
-                            message: "Search by username or display name to follow other public riders."
+                            title: "No riding buddies yet",
+                            message: "Tap + to search for riders. When two of you follow each other, you'll show up here."
                         )
-                        .padding(.top, 20)
-                    } else {
-                        ForEach(results) { profile in
-                            riderRow(profile)
+                        .padding(.top, 40)
+                    case .error(let m):
+                        ErrorBlock(message: m) { Task { await reload() } }
+                            .padding(.top, 20)
+                    case .loaded:
+                        ForEach(mutuals) { profile in
+                            friendRow(profile)
                         }
                     }
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 100)
             }
+            .refreshable { await reload() }
         }
-        .task { await reloadFollowing() }
+        .task { await reload() }
+        .sheet(isPresented: $showAddSheet) {
+            AddRidersSheet(followingIDs: $followingIDs, onDone: {
+                showAddSheet = false
+                Task { await reload() }
+            })
+            .presentationDetents([.large])
+        }
+    }
+
+    private var actionBar: some View {
+        HStack {
+            Text("Riding Buddies")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.textPrimary)
+            Spacer()
+            Button {
+                showAddSheet = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(Color.appAccent)
+                    .clipShape(Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add rider")
+        }
+    }
+
+    private func friendRow(_ profile: SocialProfile) -> some View {
+        NavigationLink {
+            PublicProfileView(userID: profile.id)
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.appAccent.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Color.appAccent)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(profile.displayName ?? profile.username ?? "Rider")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.textPrimary)
+                    if let username = profile.username {
+                        Text("@\(username)")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.textSecondary)
+                    }
+                }
+                Spacer()
+                Text("Mutual")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.appAccent.opacity(0.15))
+                    .clipShape(Capsule())
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.textTertiary)
+            }
+            .minimalCard()
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func reload() async {
+        guard let me = authService.userID else {
+            state = .error("Sign in to see your riding buddies.")
+            return
+        }
+        state = .loading
+        do {
+            let mutualIDs = try await followService.mutuals(userID: me)
+            followingIDs = Set(try await followService.following(userID: me))
+            if mutualIDs.isEmpty {
+                mutuals = []
+                state = .empty
+                return
+            }
+            let profiles = try await profileService.fetchProfiles(userIDs: mutualIDs)
+            let byID = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+            mutuals = mutualIDs.compactMap { byID[$0] }.sorted {
+                ($0.displayName ?? $0.username ?? "") < ($1.displayName ?? $1.username ?? "")
+            }
+            state = mutuals.isEmpty ? .empty : .loaded
+        } catch {
+            state = .error(userFacingSupabaseError(error, feature: "friends"))
+        }
+    }
+}
+
+// MARK: - Add Riders sheet (search + follow)
+
+/// Presented from the Riders tab plus-button. Lets the user search public
+/// profiles and toggle follow. Any changes to `followingIDs` flow back to
+/// the parent binding so the Riders list refreshes on dismiss.
+struct AddRidersSheet: View {
+    @Binding var followingIDs: Set<UUID>
+    let onDone: () -> Void
+
+    @EnvironmentObject private var authService: AuthService
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var query: String = ""
+    @State private var results: [SocialProfile] = []
+    @State private var searching = false
+    @State private var errorMessage: String?
+
+    private let profileService = SocialProfileService()
+    private let followService  = FollowService()
+
+    var body: some View {
+        ZStack {
+            Color.appBg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                AppSheetHeader(
+                    title: "Add Riders",
+                    onCancel: { onDone() },
+                    saveLabel: "Done",
+                    isSaveDisabled: false,
+                    onSave: { onDone() }
+                )
+
+                searchField
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.system(size: 13))
+                                .foregroundStyle(Color.textSecondary)
+                                .padding()
+                        }
+
+                        if searching {
+                            LoadingBlock(message: "Searching…")
+                                .padding(.top, 20)
+                        } else if !query.trimmingCharacters(in: .whitespaces).isEmpty && results.isEmpty {
+                            EmptyStateView(
+                                icon: "magnifyingglass",
+                                title: "No riders found",
+                                message: "Only riders with a public profile show up in search."
+                            )
+                            .padding(.top, 20)
+                        } else if results.isEmpty {
+                            EmptyStateView(
+                                icon: "person.crop.circle.badge.plus",
+                                title: "Search for riders",
+                                message: "Type at least 2 letters of a username or display name to find riders to follow."
+                            )
+                            .padding(.top, 20)
+                        } else {
+                            ForEach(results) { profile in
+                                riderRow(profile)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 40)
+                }
+            }
+        }
     }
 
     private var searchField: some View {
         HStack {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(Color.textSecondary)
-            TextField("Search riders", text: $query)
+            TextField("Search by username or name", text: $query)
                 .textFieldStyle(.plain)
                 .foregroundStyle(Color.textPrimary)
                 .autocorrectionDisabled()
@@ -351,34 +518,29 @@ struct RidersTab: View {
     }
 
     private func riderRow(_ profile: SocialProfile) -> some View {
-        NavigationLink {
-            PublicProfileView(userID: profile.id)
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.appAccent.opacity(0.15))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Color.appAccent)
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(profile.displayName ?? profile.username ?? "Rider")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.textPrimary)
-                    if let username = profile.username {
-                        Text("@\(username)")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.textSecondary)
-                    }
-                }
-                Spacer()
-                followButton(profile)
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.appAccent.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "person.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
             }
-            .minimalCard()
+            VStack(alignment: .leading, spacing: 4) {
+                Text(profile.displayName ?? profile.username ?? "Rider")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.textPrimary)
+                if let username = profile.username {
+                    Text("@\(username)")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.textSecondary)
+                }
+            }
+            Spacer()
+            followButton(profile)
         }
-        .buttonStyle(.plain)
+        .minimalCard()
     }
 
     @ViewBuilder
@@ -408,8 +570,6 @@ struct RidersTab: View {
             .buttonStyle(.plain)
         }
     }
-
-    // MARK: - Actions
 
     private func runSearch() async {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
@@ -442,11 +602,6 @@ struct RidersTab: View {
         } catch {
             errorMessage = "Couldn't update follow. Try again."
         }
-    }
-
-    private func reloadFollowing() async {
-        guard let me = authService.userID else { return }
-        followingIDs = Set((try? await followService.following(userID: me)) ?? [])
     }
 }
 

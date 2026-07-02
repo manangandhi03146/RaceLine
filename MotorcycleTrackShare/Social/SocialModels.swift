@@ -458,7 +458,7 @@ struct SharedRouteInsert: Encodable {
 enum ActivityKind: String, Codable, CaseIterable {
     case rideCompleted, challengeJoined, challengeCompleted
     case maintenanceLogged, groupRideCreated, sharedRoutePosted
-    case joinedGroup
+    case joinedGroup, bikeAdded
 
     var systemImage: String {
         switch self {
@@ -469,6 +469,7 @@ enum ActivityKind: String, Codable, CaseIterable {
         case .groupRideCreated:   return "person.3"
         case .sharedRoutePosted:  return "map"
         case .joinedGroup:        return "person.2.badge.plus"
+        case .bikeAdded:          return "motorcycle"
         }
     }
 }

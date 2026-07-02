@@ -394,34 +394,13 @@ struct ContentView: View {
             }
         }
 
-        // Phase 3 — emit a "ride completed" social activity if the user
-        // opted in via their privacy switches. Best-effort: never blocks the
-        // local save flow.
-        if let userID = authService.userID {
-            let capturedRide = savedRide
-            Task { await Self.emitRideCompletedActivity(userID: userID, ride: capturedRide) }
-        }
+        // Phase 3 — no ride-completion feed emit. Per product spec, the
+        // Social feed only surfaces route shares and new bike additions.
+        // Users share a ride to the feed explicitly via the Share button.
 
         rideStore.load()
         resetPendingSave()
         showNameSheet = false
-    }
-
-    private static func emitRideCompletedActivity(userID: UUID, ride: SavedRide) async {
-        let privacyService = SocialPrivacyService()
-        guard let privacy = try? await privacyService.fetch(userID: userID),
-              privacy.showRideActivities else { return }
-        let summary = String(format: "%.1f mi · %@", ride.summary.distanceMi, ride.summary.durationText)
-        try? await ActivityFeedService().emit(ActivityEventInsert(
-            actorID: userID,
-            kind: .rideCompleted,
-            subjectID: ride.id,
-            subjectKind: "ride",
-            title: ride.name,
-            summary: summary,
-            visibility: .followers,
-            groupID: nil
-        ))
     }
 
     private func resetPendingSave() {

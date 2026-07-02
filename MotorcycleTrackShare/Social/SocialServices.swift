@@ -175,6 +175,17 @@ struct FollowService {
         return rows.map(\.follower_id)
     }
 
+    /// Returns the set of user ids that the given user is mutually
+    /// following (they follow each other). Used by the Riders tab and
+    /// the challenge leaderboard.
+    func mutuals(userID: UUID) async throws -> [UUID] {
+        async let followingIDs = following(userID: userID)
+        async let followerIDs  = followers(userID: userID)
+        let (a, b) = try await (followingIDs, followerIDs)
+        let followingSet = Set(a)
+        return b.filter { followingSet.contains($0) }
+    }
+
     func isFollowing(follower: UUID, followee: UUID) async throws -> Bool {
         struct HitRow: Decodable {}
         do {
@@ -314,6 +325,18 @@ struct GroupService {
             .delete()
             .eq("group_id", value: groupID.uuidString)
             .eq("user_id", value: userID.uuidString)
+            .execute()
+    }
+
+    /// Owner-only delete. RLS (migration 014 `groups_delete_owner`)
+    /// enforces this on the server — non-owners get a permission error.
+    /// ON DELETE CASCADE takes care of `group_members`, `group_rides`,
+    /// `challenges`, and any `shared_routes` scoped to this group.
+    func deleteGroup(groupID: UUID) async throws {
+        try await client
+            .from(SocialTable.groups)
+            .delete()
+            .eq("id", value: groupID.uuidString)
             .execute()
     }
 
@@ -497,6 +520,30 @@ struct ChallengeService {
             .eq("user_id", value: userID.uuidString)
             .execute()
     }
+
+    /// Leaderboard restricted to the caller + their mutual followers.
+    /// RLS (migration 017) allows reading `challenge_progress` rows for
+    /// any user the caller is mutually following, so we filter to
+    /// (mutuals + self) client-side to keep the request cheap.
+    func leaderboard(challengeID: UUID, viewerID: UUID,
+                     mutuals: [UUID]) async throws -> [ChallengeProgress] {
+        let ids = (Set(mutuals) + [viewerID]).map { $0.uuidString.lowercased() }
+        guard !ids.isEmpty else { return [] }
+        return try await client
+            .from(SocialTable.challengeProgress)
+            .select()
+            .eq("challenge_id", value: challengeID.uuidString)
+            .in("user_id", values: ids)
+            .order("current_value", ascending: false)
+            .execute()
+            .value
+    }
+}
+
+private func + <T: Hashable>(lhs: Set<T>, rhs: [T]) -> Set<T> {
+    var out = lhs
+    out.formUnion(rhs)
+    return out
 }
 
 // MARK: - Shared routes
@@ -592,11 +639,17 @@ struct ActivityFeedService {
     private let client = SupabaseManager.shared.client
 
     /// Feed items the current user is allowed to see. RLS filters everything
-    /// down to actor-own + follower/group/public rows.
+    /// down to actor-own + follower/group/public rows. The `.in` filter keeps
+    /// the feed focused on meaningful social activity only: route shares and
+    /// new bike additions (per product spec).
     func feed(limit: Int = 40) async throws -> [ActivityEvent] {
         try await client
             .from(SocialTable.activityFeed)
             .select()
+            .in("kind", values: [
+                ActivityKind.sharedRoutePosted.rawValue,
+                ActivityKind.bikeAdded.rawValue
+            ])
             .order("created_at", ascending: false)
             .limit(limit)
             .execute()
@@ -623,9 +676,10 @@ struct ActivityFeedService {
             guard privacy.showMaintenanceActivities else { return }
         case .groupRideCreated, .joinedGroup:
             guard privacy.showGroupActivities else { return }
-        case .sharedRoutePosted:
-            // Always emit — the visibility of the underlying route already
-            // gates the reach; the activity row uses the same visibility.
+        case .sharedRoutePosted, .bikeAdded:
+            // Always emit — the visibility of the underlying route/bike
+            // already gates the reach; the activity row uses the same
+            // visibility, so no per-kind privacy switch applies.
             break
         }
         try await emit(insert)

@@ -252,18 +252,6 @@ struct CreateGroupSheet: View {
                 description: description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : description,
                 isPublic: isPublic
             )
-            if let uid = authService.userID {
-                _ = try? await ActivityFeedService().emit(ActivityEventInsert(
-                    actorID: uid,
-                    kind: .joinedGroup,
-                    subjectID: group.id,
-                    subjectKind: "group",
-                    title: "Created a group",
-                    summary: group.name,
-                    visibility: .followers,
-                    groupID: nil
-                ))
-            }
             onDone(group)
         } catch let e as SocialError {
             errorMessage = e.errorDescription
@@ -349,15 +337,35 @@ struct GroupDetailView: View {
     let group: GroupSummary
 
     @EnvironmentObject private var authService: AuthService
+    @Environment(\.dismiss) private var dismiss
 
     @State private var members: [GroupMember] = []
     @State private var rides: [GroupRide] = []
     @State private var loading = true
     @State private var errorMessage: String?
     @State private var showLeaveConfirm = false
+    @State private var showDeleteConfirm = false
     @State private var didLeave = false
 
     private let service = GroupService()
+
+    /// The current user owns the group when the local copy of the row has
+    /// their id as `owner_id`. Migration 017 auto-transfers ownership on
+    /// owner leave, so this stays truthful across reloads.
+    private var isOwner: Bool {
+        authService.userID == group.ownerID
+    }
+
+    /// Owner leaving with other members still present will hand ownership
+    /// off to the longest-tenured remaining member via the DB trigger.
+    private var willTransferOwnershipOnLeave: Bool {
+        isOwner && members.count > 1
+    }
+
+    /// Last-member-leaving auto-deletes the group. Warn the user.
+    private var willDeleteGroupOnLeave: Bool {
+        members.count <= 1
+    }
 
     var body: some View {
         ScrollView {
@@ -388,13 +396,22 @@ struct GroupDetailView: View {
                 }
 
                 if !didLeave {
+                    if isOwner {
+                        Button("Delete Group") { showDeleteConfirm = true }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .foregroundStyle(.white)
+                            .background(Color.red.opacity(0.9))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .padding(.top, 10)
+                    }
                     Button("Leave Group") { showLeaveConfirm = true }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .foregroundStyle(.white)
-                        .background(Color.red.opacity(0.85))
+                        .background(Color.red.opacity(0.7))
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .padding(.top, 10)
+                        .padding(.top, isOwner ? 0 : 10)
                 }
                 if let errorMessage {
                     Text(errorMessage)
@@ -414,8 +431,24 @@ struct GroupDetailView: View {
             Button("Leave", role: .destructive) { Task { await leave() } }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("You'll need the invite code to rejoin.")
+            Text(leaveWarningText)
         }
+        .alert("Delete this group?", isPresented: $showDeleteConfirm) {
+            Button("Delete", role: .destructive) { Task { await deleteGroup() } }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This removes the group and all its rides for every member. This can't be undone.")
+        }
+    }
+
+    private var leaveWarningText: String {
+        if willDeleteGroupOnLeave {
+            return "You're the last member — leaving will delete this group and its rides."
+        }
+        if willTransferOwnershipOnLeave {
+            return "You'll be leaving as the owner. Ownership will move to the longest-standing member."
+        }
+        return "You'll need the invite code to rejoin."
     }
 
     private var headerCard: some View {
@@ -548,8 +581,20 @@ struct GroupDetailView: View {
         do {
             try await service.leave(userID: uid, groupID: group.id)
             didLeave = true
+            dismiss()
         } catch {
             errorMessage = "Couldn't leave the group."
+        }
+    }
+
+    private func deleteGroup() async {
+        guard isOwner else { return }
+        do {
+            try await service.deleteGroup(groupID: group.id)
+            didLeave = true
+            dismiss()
+        } catch {
+            errorMessage = "Couldn't delete the group. Only the owner can delete a group."
         }
     }
 }

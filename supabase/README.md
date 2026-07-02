@@ -24,11 +24,12 @@ Run in this exact order:
 14. `migrations/014_groups_full_reset.sql` — **Idempotent full reset of `groups` + `group_members`**: wipes every leftover policy/trigger/function from 006–013, re-grants table privileges to `authenticated`/`service_role`, and rebuilds the whole stack from scratch. Run this any time group creation is misbehaving — it supersedes everything above for these two tables.
 15. `migrations/015_groups_fix_recursion.sql` — Fixes 42P17 "infinite recursion detected in policy" by moving every cross-row membership check into SECURITY DEFINER helper functions (`is_group_member`, `is_group_admin`, `is_group_public`) with `row_security = off`. The policies now call the helpers instead of doing inline `EXISTS FROM group_members`, which would otherwise re-trigger the policy on the inner SELECT.
 16. `migrations/016_groups_select_owner.sql` — Adds `owner_id = auth.uid()` to the `groups_select_visible` policy so the RETURNING read from `.insert().select().single()` succeeds for private groups the caller just created. This is the migration that finally unblocked group creation end-to-end.
+17. `migrations/017_social_polish.sql` — Feed + groups + challenge leaderboard polish: (a) adds `bikeAdded` to the allowed `activity_feed.kind` values plus `bike` as a subject kind; (b) adds an AFTER DELETE trigger on `group_members` that auto-deletes empty groups and transfers ownership to the longest-tenured remaining member when the owner leaves; (c) adds a `mutual_follows(a, b)` helper + SELECT policy so a rider can see their mutual followers' progress on the challenge leaderboard and see mutual followers' profiles in the Riders list.
 
 Then:
-17. Create storage buckets manually (see below)
-18. Deploy Edge Functions (see below)
-19. Configure Auth redirect URLs (see below)
+18. Create storage buckets manually (see below)
+19. Deploy Edge Functions (see below)
+20. Configure Auth redirect URLs (see below)
 
 ---
 
