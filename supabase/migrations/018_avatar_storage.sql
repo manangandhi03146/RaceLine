@@ -1,27 +1,26 @@
 -- ============================================================
--- RaceLine — Migration 018: Avatar storage policies
+-- RaceLine — Migration 018: Avatar storage
 -- Run AFTER 017_social_polish.sql
 --
--- PREREQUISITE: create a bucket named `avatars` in the Supabase
--- Dashboard first. Mark it PUBLIC — avatars are meant to be visible
--- to any signed-in rider on the app. The RLS policies below still
--- restrict writes to the owning user.
+-- Creates the `avatars` PUBLIC bucket + write-only-by-owner policies.
+--
+-- Public buckets serve their objects at
+--   {supabase_url}/storage/v1/object/public/avatars/{path}
+-- without a SELECT policy — we deliberately do NOT add a broad SELECT
+-- policy so clients can't enumerate everyone's avatars via list().
 --
 -- Storage path convention:
 --   {user_id}/avatar.jpg
---
--- Anyone (including anon) can SELECT so we can render URLs without
--- a signed URL round-trip. Writes are always owner-only.
 -- ============================================================
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('avatars', 'avatars', TRUE)
+ON CONFLICT (id) DO UPDATE SET public = EXCLUDED.public;
 
 DROP POLICY IF EXISTS "avatars: signed-in can read"       ON storage.objects;
 DROP POLICY IF EXISTS "avatars: users upload own avatar"  ON storage.objects;
 DROP POLICY IF EXISTS "avatars: users update own avatar"  ON storage.objects;
 DROP POLICY IF EXISTS "avatars: users delete own avatar"  ON storage.objects;
-
-CREATE POLICY "avatars: signed-in can read"
-    ON storage.objects FOR SELECT
-    USING (bucket_id = 'avatars');
 
 CREATE POLICY "avatars: users upload own avatar"
     ON storage.objects FOR INSERT
