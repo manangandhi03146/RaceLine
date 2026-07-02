@@ -64,7 +64,7 @@ struct PublicProfileView: View {
 
     private func heroCard(_ profile: SocialProfile) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            avatarView(for: profile)
+            ProfileAvatarBubble(profile: profile, size: 60)
             Text(profile.displayName ?? profile.username ?? "Rider")
                 .font(.system(size: 24, weight: .bold))
                 .foregroundStyle(Color.textPrimary)
@@ -83,35 +83,7 @@ struct PublicProfileView: View {
         .minimalCard()
     }
 
-    @ViewBuilder
-    private func avatarView(for profile: SocialProfile) -> some View {
-        ZStack {
-            Circle()
-                .fill(Color.appAccent.opacity(0.15))
-                .frame(width: 60, height: 60)
-            if let path = profile.avatarPath,
-               let url  = profileService.avatarPublicURL(path: path) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(Color.appAccent)
-                    }
-                }
-                .frame(width: 60, height: 60)
-                .clipShape(Circle())
-            } else {
-                Image(systemName: "person.fill")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(Color.appAccent)
-            }
-        }
-    }
-
-    @ViewBuilder
+@ViewBuilder
     private func followRow(_ profile: SocialProfile) -> some View {
         if profile.id != authService.userID {
             Button {

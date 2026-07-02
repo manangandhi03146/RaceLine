@@ -350,14 +350,7 @@ struct RidersTab: View {
             PublicProfileView(userID: profile.id)
         } label: {
             HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.appAccent.opacity(0.15))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Color.appAccent)
-                }
+                ProfileAvatarBubble(profile: profile, size: 44)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(profile.displayName ?? profile.username ?? "Rider")
                         .font(.system(size: 15, weight: .semibold))
@@ -519,14 +512,7 @@ struct AddRidersSheet: View {
 
     private func riderRow(_ profile: SocialProfile) -> some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(Color.appAccent.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                Image(systemName: "person.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.appAccent)
-            }
+            ProfileAvatarBubble(profile: profile, size: 44)
             VStack(alignment: .leading, spacing: 4) {
                 Text(profile.displayName ?? profile.username ?? "Rider")
                     .font(.system(size: 15, weight: .semibold))
@@ -601,6 +587,46 @@ struct AddRidersSheet: View {
             }
         } catch {
             errorMessage = "Couldn't update follow. Try again."
+        }
+    }
+}
+
+// MARK: - Shared avatar bubble
+
+/// Circular avatar view for a `SocialProfile`. Renders the uploaded
+/// avatar via the public URL if `avatarPath` is set; otherwise falls
+/// back to a person glyph so rows always keep their shape.
+struct ProfileAvatarBubble: View {
+    let profile: SocialProfile?
+    var size: CGFloat = 44
+
+    private let service = SocialProfileService()
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.appAccent.opacity(0.15))
+                .frame(width: size, height: size)
+            if let path = profile?.avatarPath,
+               !path.isEmpty,
+               let url = service.avatarPublicURL(path: path) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        Image(systemName: "person.fill")
+                            .font(.system(size: size * 0.4, weight: .semibold))
+                            .foregroundStyle(Color.appAccent)
+                    }
+                }
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+            } else {
+                Image(systemName: "person.fill")
+                    .font(.system(size: size * 0.4, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+            }
         }
     }
 }
