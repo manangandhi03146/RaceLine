@@ -26,11 +26,12 @@ Run in this exact order:
 16. `migrations/016_groups_select_owner.sql` — Adds `owner_id = auth.uid()` to the `groups_select_visible` policy so the RETURNING read from `.insert().select().single()` succeeds for private groups the caller just created. This is the migration that finally unblocked group creation end-to-end.
 17. `migrations/017_social_polish.sql` — Feed + groups + challenge leaderboard polish: (a) adds `bikeAdded` to the allowed `activity_feed.kind` values plus `bike` as a subject kind; (b) adds an AFTER DELETE trigger on `group_members` that auto-deletes empty groups and transfers ownership to the longest-tenured remaining member when the owner leaves; (c) adds a `mutual_follows(a, b)` helper + SELECT policy so a rider can see their mutual followers' progress on the challenge leaderboard and see mutual followers' profiles in the Riders list.
 18. `migrations/018_avatar_storage.sql` — Creates the `avatars` PUBLIC bucket + owner-only write policies. Reads are handled by the bucket's `public = TRUE` flag (URLs work without a SELECT policy) — we intentionally do not grant SELECT so clients can't enumerate everyone's avatars via `list()`.
+19. `migrations/019_group_rides_phase4.sql` — Phase 4 group ride navigation. Extends `group_rides` with destination/waypoints/status/visibility/live_location_enabled, adds `group_ride_participants` and `group_ride_live_locations` tables, and adds `rides.group_ride_id` for post-ride linkage. RLS gates ride visibility by group membership, participants by group membership, and live locations by participation. Also adds an AFTER INSERT trigger on `group_rides` so the creator is auto-joined as a participant.
 
 Then:
-19. Create storage buckets manually (see below)
-20. Deploy Edge Functions (see below)
-21. Configure Auth redirect URLs (see below)
+20. Create storage buckets manually (see below)
+21. Deploy Edge Functions (see below)
+22. Configure Auth redirect URLs (see below)
 
 ---
 

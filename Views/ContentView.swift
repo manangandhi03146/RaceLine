@@ -387,10 +387,22 @@ struct ContentView: View {
         // Cloud sync if enabled
         if mode.isCloudEnabled, let userID = authService.userID {
             let photo = pendingRidePhoto
+            let localRideID = savedRide.id
+            let groupRideIDString = UserDefaults.standard.string(forKey: "activeGroupRideID") ?? ""
             Task {
                 await syncService.syncNow()
                 _ = savedRide
                 _ = photo
+                // Phase 4 — if the user tapped "Start RaceLine Recording"
+                // from a group ride, attach the group_ride_id to the
+                // uploaded ride row so we can show recap connections later.
+                if !groupRideIDString.isEmpty,
+                   let groupRideID = UUID(uuidString: groupRideIDString) {
+                    await Self.attachGroupRide(groupRideID: groupRideID,
+                                               localRideID: localRideID,
+                                               userID: userID)
+                    UserDefaults.standard.removeObject(forKey: "activeGroupRideID")
+                }
             }
         }
 
@@ -401,6 +413,20 @@ struct ContentView: View {
         rideStore.load()
         resetPendingSave()
         showNameSheet = false
+    }
+
+    /// Once the cloud-synced ride row exists, tag it with the group ride
+    /// id so recap views can link back. Best-effort — swallowed if the
+    /// row hasn't uploaded yet or the auth session is stale.
+    private static func attachGroupRide(groupRideID: UUID, localRideID: UUID, userID: UUID) async {
+        struct Patch: Encodable { let group_ride_id: String }
+        let client = SupabaseManager.shared.client
+        _ = try? await client
+            .from("rides")
+            .update(Patch(group_ride_id: groupRideID.uuidString.lowercased()))
+            .eq("local_id", value: localRideID.uuidString)
+            .eq("user_id",  value: userID.uuidString)
+            .execute()
     }
 
     private func resetPendingSave() {

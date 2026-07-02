@@ -5,16 +5,18 @@ import UIKit
 // MARK: - Table constants
 
 private enum SocialTable {
-    static let profiles         = "profiles"
-    static let privacy          = "social_privacy_settings"
-    static let follows          = "follows"
-    static let groups           = "groups"
-    static let groupMembers     = "group_members"
-    static let groupRides       = "group_rides"
-    static let challenges       = "challenges"
-    static let challengeProgress = "challenge_progress"
-    static let sharedRoutes     = "shared_routes"
-    static let activityFeed     = "activity_feed"
+    static let profiles              = "profiles"
+    static let privacy               = "social_privacy_settings"
+    static let follows               = "follows"
+    static let groups                = "groups"
+    static let groupMembers          = "group_members"
+    static let groupRides            = "group_rides"
+    static let groupRideParticipants = "group_ride_participants"
+    static let groupRideLiveLocations = "group_ride_live_locations"
+    static let challenges            = "challenges"
+    static let challengeProgress     = "challenge_progress"
+    static let sharedRoutes          = "shared_routes"
+    static let activityFeed          = "activity_feed"
 }
 
 // MARK: - Public profile
@@ -426,41 +428,9 @@ struct GroupService {
             .from(SocialTable.groupRides)
             .select()
             .eq("group_id", value: groupID.uuidString)
+            .order("scheduled_at", ascending: true)
             .order("created_at", ascending: false)
             .limit(limit)
-            .execute()
-            .value
-    }
-
-    private struct GroupRideInsert: Encodable {
-        let group_id: String
-        let author_id: String
-        let ride_id: String?
-        let title: String
-        let description: String?
-        let scheduled_at: Date?
-    }
-
-    func postGroupRide(groupID: UUID,
-                       authorID: UUID,
-                       rideID: UUID?,
-                       title: String,
-                       description: String?,
-                       scheduledAt: Date?) async throws -> GroupRide {
-        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard title.count >= 2 else { throw SocialError.validation("Title is too short.") }
-        return try await client
-            .from(SocialTable.groupRides)
-            .insert(GroupRideInsert(
-                group_id: groupID.uuidString.lowercased(),
-                author_id: authorID.uuidString.lowercased(),
-                ride_id: rideID?.uuidString.lowercased(),
-                title: title,
-                description: description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-                scheduled_at: scheduledAt
-            ))
-            .select()
-            .single()
             .execute()
             .value
     }
@@ -752,6 +722,186 @@ struct ActivityFeedService {
             break
         }
         try await emit(insert)
+    }
+}
+
+// MARK: - Group rides (Phase 4)
+
+/// Full CRUD + participants + optional live-location sharing for the
+/// Phase 4 "shared destination ride" concept. Google Maps handles the
+/// actual turn-by-turn navigation — see `GoogleMapsRouteService`.
+struct GroupRideService {
+    private let client = SupabaseManager.shared.client
+
+    // ----- Rides -----
+
+    func create(_ insert: GroupRideInsert) async throws -> GroupRide {
+        do {
+            return try await client
+                .from(SocialTable.groupRides)
+                .insert(insert)
+                .select()
+                .single()
+                .execute()
+                .value
+        } catch {
+            if isNotFound(error) { throw SocialError.notFound }
+            throw error
+        }
+    }
+
+    func ride(id: UUID) async throws -> GroupRide {
+        do {
+            return try await client
+                .from(SocialTable.groupRides)
+                .select()
+                .eq("id", value: id.uuidString)
+                .single()
+                .execute()
+                .value
+        } catch {
+            if isNotFound(error) { throw SocialError.notFound }
+            throw error
+        }
+    }
+
+    func rides(forGroup groupID: UUID, limit: Int = 25) async throws -> [GroupRide] {
+        try await client
+            .from(SocialTable.groupRides)
+            .select()
+            .eq("group_id", value: groupID.uuidString)
+            .order("scheduled_at", ascending: true)
+            .order("created_at", ascending: false)
+            .limit(limit)
+            .execute()
+            .value
+    }
+
+    private struct StatusUpdate: Encodable {
+        let status: String
+        let started_at: Date?
+        let completed_at: Date?
+    }
+
+    /// Move a ride to `active` / `completed` / `cancelled`. Only the
+    /// author or a group admin can do this (enforced by RLS).
+    func setStatus(rideID: UUID, status: GroupRideStatus) async throws -> GroupRide {
+        let now = Date()
+        let payload = StatusUpdate(
+            status: status.rawValue,
+            started_at:   status == .active    ? now : nil,
+            completed_at: status == .completed ? now : nil
+        )
+        return try await client
+            .from(SocialTable.groupRides)
+            .update(payload)
+            .eq("id", value: rideID.uuidString)
+            .select()
+            .single()
+            .execute()
+            .value
+    }
+
+    func delete(rideID: UUID) async throws {
+        try await client
+            .from(SocialTable.groupRides)
+            .delete()
+            .eq("id", value: rideID.uuidString)
+            .execute()
+    }
+
+    // ----- Participants -----
+
+    func participants(rideID: UUID) async throws -> [GroupRideParticipant] {
+        try await client
+            .from(SocialTable.groupRideParticipants)
+            .select()
+            .eq("group_ride_id", value: rideID.uuidString)
+            .order("joined_at", ascending: true)
+            .execute()
+            .value
+    }
+
+    private struct ParticipantInsert: Encodable {
+        let group_ride_id: String
+        let user_id: String
+        let status: String
+    }
+
+    func join(rideID: UUID, userID: UUID,
+              status: GroupRideParticipantStatus = .joined) async throws {
+        do {
+            try await client
+                .from(SocialTable.groupRideParticipants)
+                .upsert(ParticipantInsert(
+                    group_ride_id: rideID.uuidString.lowercased(),
+                    user_id:       userID.uuidString.lowercased(),
+                    status:        status.rawValue
+                ), onConflict: "group_ride_id,user_id")
+                .execute()
+        } catch {
+            throw error
+        }
+    }
+
+    private struct ParticipantStatusUpdate: Encodable {
+        let status: String
+    }
+
+    func updateStatus(rideID: UUID, userID: UUID,
+                      status: GroupRideParticipantStatus) async throws {
+        try await client
+            .from(SocialTable.groupRideParticipants)
+            .update(ParticipantStatusUpdate(status: status.rawValue))
+            .eq("group_ride_id", value: rideID.uuidString)
+            .eq("user_id", value: userID.uuidString)
+            .execute()
+    }
+
+    func leave(rideID: UUID, userID: UUID) async throws {
+        try await client
+            .from(SocialTable.groupRideParticipants)
+            .delete()
+            .eq("group_ride_id", value: rideID.uuidString)
+            .eq("user_id", value: userID.uuidString)
+            .execute()
+    }
+
+    // ----- Live location sharing -----
+
+    /// Upsert the caller's current location for a ride. RLS enforces
+    /// that the caller is a participant of the ride they're writing to.
+    func upsertLiveLocation(_ upsert: GroupRideLiveLocationUpsert) async throws {
+        try await client
+            .from(SocialTable.groupRideLiveLocations)
+            .upsert(upsert, onConflict: "group_ride_id,user_id")
+            .execute()
+    }
+
+    /// Read all shared locations for a ride. RLS scopes visibility to
+    /// fellow participants; app-side we additionally filter for
+    /// `sharing_enabled = true` and fresh timestamps.
+    func liveLocations(rideID: UUID) async throws -> [GroupRideLiveLocation] {
+        try await client
+            .from(SocialTable.groupRideLiveLocations)
+            .select()
+            .eq("group_ride_id", value: rideID.uuidString)
+            .eq("sharing_enabled", value: true)
+            .execute()
+            .value
+    }
+
+    /// Flip the sharing flag OFF without deleting the row (keeps
+    /// history for the ride) or delete outright. We choose "off" so
+    /// history/analytics could look back later.
+    func stopSharingLocation(rideID: UUID, userID: UUID) async throws {
+        struct Off: Encodable { let sharing_enabled: Bool }
+        try await client
+            .from(SocialTable.groupRideLiveLocations)
+            .update(Off(sharing_enabled: false))
+            .eq("group_ride_id", value: rideID.uuidString)
+            .eq("user_id", value: userID.uuidString)
+            .execute()
     }
 }
 

@@ -345,9 +345,11 @@ struct GroupDetailView: View {
     @State private var errorMessage: String?
     @State private var showLeaveConfirm = false
     @State private var showDeleteConfirm = false
+    @State private var showCreateGroupRide = false
     @State private var didLeave = false
 
     private let service = GroupService()
+    private let groupRideService = GroupRideService()
 
     /// The current user owns the group when the local copy of the row has
     /// their id as `owner_id`. Migration 017 auto-transfers ownership on
@@ -384,14 +386,34 @@ struct GroupDetailView: View {
                     }
                 }
 
-                sectionHeader("Group Rides")
+                HStack {
+                    sectionHeader("Planned Rides")
+                    Spacer()
+                    Button {
+                        showCreateGroupRide = true
+                    } label: {
+                        Label("New", systemImage: "plus")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.appAccent)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
                 if rides.isEmpty {
-                    Text("No group rides posted yet.")
+                    Text("No group rides planned yet. Tap New to share a destination with the group.")
                         .font(.system(size: 13))
                         .foregroundStyle(Color.textSecondary)
                 } else {
                     ForEach(rides) { ride in
-                        rideRow(ride)
+                        NavigationLink {
+                            GroupRideDetailView(rideID: ride.id)
+                        } label: {
+                            GroupRideRow(ride: ride)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
 
@@ -438,6 +460,15 @@ struct GroupDetailView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("This removes the group and all its rides for every member. This can't be undone.")
+        }
+        .sheet(isPresented: $showCreateGroupRide) {
+            CreateGroupRideSheet(groupID: group.id) { newRide in
+                showCreateGroupRide = false
+                if let newRide {
+                    rides.insert(newRide, at: 0)
+                }
+            }
+            .presentationDetents([.large])
         }
     }
 
@@ -535,29 +566,6 @@ struct GroupDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private func rideRow(_ ride: GroupRide) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(ride.title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.textPrimary)
-            if let desc = ride.description, !desc.isEmpty {
-                Text(desc)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let scheduled = ride.scheduledAt {
-                Text(scheduled, style: .date)
-                    .font(.caption)
-                    .foregroundStyle(Color.textGhost)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(Color.appSurface2)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
     private func shortID(_ id: UUID) -> String {
         String(id.uuidString.prefix(8))
     }
@@ -567,7 +575,7 @@ struct GroupDetailView: View {
         defer { loading = false }
         do {
             async let m = service.members(groupID: group.id)
-            async let r = service.groupRides(groupID: group.id)
+            async let r = groupRideService.rides(forGroup: group.id)
             let (mList, rList) = try await (m, r)
             members = mList
             rides = rList

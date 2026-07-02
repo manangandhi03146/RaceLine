@@ -252,25 +252,228 @@ struct GroupMember: Codable, Identifiable, Equatable, Hashable {
     }
 }
 
-struct GroupRide: Codable, Identifiable, Equatable {
+// MARK: - Group rides (Phase 4)
+
+enum GroupRideStatus: String, Codable, CaseIterable {
+    case planned, active, completed, cancelled
+
+    var displayName: String {
+        switch self {
+        case .planned:   return "Planned"
+        case .active:    return "Active"
+        case .completed: return "Completed"
+        case .cancelled: return "Cancelled"
+        }
+    }
+}
+
+enum GroupRideVisibility: String, Codable, CaseIterable, Identifiable {
+    case groupOnly = "group_only"
+    case publicVisible = "public"
+
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .groupOnly:     return "Group only"
+        case .publicVisible: return "Public"
+        }
+    }
+}
+
+/// One waypoint / stop on a shared group ride route. Stored as JSONB
+/// inside `group_rides.waypoints`.
+struct GroupRideWaypoint: Codable, Equatable, Hashable, Identifiable {
+    var id: UUID = UUID()
+    var name: String
+    var address: String?
+    var latitude: Double?
+    var longitude: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, address, latitude, longitude
+    }
+}
+
+/// Full group ride model. `description` doubles as the free-form
+/// "ride notes" field the create sheet exposes; keeping the DB
+/// column name for backward compatibility.
+struct GroupRide: Codable, Identifiable, Equatable, Hashable {
     let id: UUID
     let groupID: UUID
     let authorID: UUID
     let rideID: UUID?
     let title: String
     let description: String?
+    let destinationName: String?
+    let destinationAddress: String?
+    let destinationLatitude: Double?
+    let destinationLongitude: Double?
+    let waypoints: [GroupRideWaypoint]
+    let googleMapsURL: String?
+    let status: GroupRideStatus
+    let visibility: GroupRideVisibility
+    let liveLocationEnabled: Bool
     let scheduledAt: Date?
+    let startedAt: Date?
+    let completedAt: Date?
     let createdAt: Date
 
     enum CodingKeys: String, CodingKey {
         case id
-        case groupID     = "group_id"
-        case authorID    = "author_id"
-        case rideID      = "ride_id"
+        case groupID                 = "group_id"
+        case authorID                = "author_id"
+        case rideID                  = "ride_id"
         case title
         case description
-        case scheduledAt = "scheduled_at"
-        case createdAt   = "created_at"
+        case destinationName         = "destination_name"
+        case destinationAddress      = "destination_address"
+        case destinationLatitude     = "destination_latitude"
+        case destinationLongitude    = "destination_longitude"
+        case waypoints
+        case googleMapsURL           = "google_maps_url"
+        case status
+        case visibility
+        case liveLocationEnabled     = "live_location_enabled"
+        case scheduledAt             = "scheduled_at"
+        case startedAt               = "started_at"
+        case completedAt             = "completed_at"
+        case createdAt               = "created_at"
+    }
+}
+
+struct GroupRideInsert: Encodable {
+    let groupID: UUID
+    let authorID: UUID
+    let title: String
+    let description: String?
+    let destinationName: String?
+    let destinationAddress: String?
+    let destinationLatitude: Double?
+    let destinationLongitude: Double?
+    let waypoints: [GroupRideWaypoint]
+    let googleMapsURL: String?
+    let visibility: GroupRideVisibility
+    let liveLocationEnabled: Bool
+    let scheduledAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case groupID                 = "group_id"
+        case authorID                = "author_id"
+        case title
+        case description
+        case destinationName         = "destination_name"
+        case destinationAddress      = "destination_address"
+        case destinationLatitude     = "destination_latitude"
+        case destinationLongitude    = "destination_longitude"
+        case waypoints
+        case googleMapsURL           = "google_maps_url"
+        case visibility
+        case liveLocationEnabled     = "live_location_enabled"
+        case scheduledAt             = "scheduled_at"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(groupID.uuidString.lowercased(),  forKey: .groupID)
+        try c.encode(authorID.uuidString.lowercased(), forKey: .authorID)
+        try c.encode(title, forKey: .title)
+        if let description        { try c.encode(description,        forKey: .description) }
+        if let destinationName    { try c.encode(destinationName,    forKey: .destinationName) }
+        if let destinationAddress { try c.encode(destinationAddress, forKey: .destinationAddress) }
+        if let destinationLatitude  { try c.encode(destinationLatitude,  forKey: .destinationLatitude) }
+        if let destinationLongitude { try c.encode(destinationLongitude, forKey: .destinationLongitude) }
+        try c.encode(waypoints, forKey: .waypoints)
+        if let googleMapsURL { try c.encode(googleMapsURL, forKey: .googleMapsURL) }
+        try c.encode(visibility.rawValue, forKey: .visibility)
+        try c.encode(liveLocationEnabled, forKey: .liveLocationEnabled)
+        if let scheduledAt { try c.encode(scheduledAt, forKey: .scheduledAt) }
+    }
+}
+
+enum GroupRideParticipantStatus: String, Codable, CaseIterable {
+    case interested, joined, riding, completed, cancelled
+
+    var displayName: String {
+        switch self {
+        case .interested: return "Interested"
+        case .joined:     return "Joined"
+        case .riding:     return "Riding"
+        case .completed:  return "Completed"
+        case .cancelled:  return "Cancelled"
+        }
+    }
+}
+
+struct GroupRideParticipant: Codable, Identifiable, Equatable, Hashable {
+    var id: String { "\(groupRideID.uuidString)-\(userID.uuidString)" }
+
+    let groupRideID: UUID
+    let userID: UUID
+    let status: GroupRideParticipantStatus
+    let joinedAt: Date
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case groupRideID = "group_ride_id"
+        case userID      = "user_id"
+        case status
+        case joinedAt    = "joined_at"
+        case updatedAt   = "updated_at"
+    }
+}
+
+struct GroupRideLiveLocation: Codable, Identifiable, Equatable, Hashable {
+    var id: String { "\(groupRideID.uuidString)-\(userID.uuidString)" }
+
+    let groupRideID: UUID
+    let userID: UUID
+    let latitude: Double
+    let longitude: Double
+    let heading: Double?
+    let speedMPS: Double?
+    let sharingEnabled: Bool
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case groupRideID    = "group_ride_id"
+        case userID         = "user_id"
+        case latitude
+        case longitude
+        case heading
+        case speedMPS       = "speed_mps"
+        case sharingEnabled = "sharing_enabled"
+        case updatedAt      = "updated_at"
+    }
+}
+
+struct GroupRideLiveLocationUpsert: Encodable {
+    let groupRideID: UUID
+    let userID: UUID
+    let latitude: Double
+    let longitude: Double
+    let heading: Double?
+    let speedMPS: Double?
+    let sharingEnabled: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case groupRideID    = "group_ride_id"
+        case userID         = "user_id"
+        case latitude
+        case longitude
+        case heading
+        case speedMPS       = "speed_mps"
+        case sharingEnabled = "sharing_enabled"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(groupRideID.uuidString.lowercased(), forKey: .groupRideID)
+        try c.encode(userID.uuidString.lowercased(),      forKey: .userID)
+        try c.encode(latitude,  forKey: .latitude)
+        try c.encode(longitude, forKey: .longitude)
+        if let heading  { try c.encode(heading,  forKey: .heading) }
+        if let speedMPS { try c.encode(speedMPS, forKey: .speedMPS) }
+        try c.encode(sharingEnabled, forKey: .sharingEnabled)
     }
 }
 
