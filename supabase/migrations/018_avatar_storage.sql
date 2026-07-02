@@ -6,8 +6,13 @@
 --
 -- Public buckets serve their objects at
 --   {supabase_url}/storage/v1/object/public/avatars/{path}
--- without a SELECT policy — we deliberately do NOT add a broad SELECT
--- policy so clients can't enumerate everyone's avatars via list().
+-- without needing a broad SELECT policy. We DO grant SELECT scoped
+-- to the owner because Supabase Storage does `INSERT ... RETURNING *`
+-- when the app uploads, and that RETURNING is subject to the SELECT
+-- USING clause. Without an owner-scoped SELECT policy the upload
+-- fails with "new row violates row-level security policy for objects".
+-- Scoping the SELECT to the owner still prevents `list()` from
+-- enumerating other users' avatars.
 --
 -- Storage path convention:
 --   {user_id}/avatar.jpg
@@ -18,9 +23,18 @@ VALUES ('avatars', 'avatars', TRUE)
 ON CONFLICT (id) DO UPDATE SET public = EXCLUDED.public;
 
 DROP POLICY IF EXISTS "avatars: signed-in can read"       ON storage.objects;
+DROP POLICY IF EXISTS "avatars: users read own avatar"    ON storage.objects;
 DROP POLICY IF EXISTS "avatars: users upload own avatar"  ON storage.objects;
 DROP POLICY IF EXISTS "avatars: users update own avatar"  ON storage.objects;
 DROP POLICY IF EXISTS "avatars: users delete own avatar"  ON storage.objects;
+
+CREATE POLICY "avatars: users read own avatar"
+    ON storage.objects FOR SELECT
+    TO authenticated
+    USING (
+        bucket_id = 'avatars'
+        AND (storage.foldername(name))[1] = auth.uid()::text
+    );
 
 CREATE POLICY "avatars: users upload own avatar"
     ON storage.objects FOR INSERT
